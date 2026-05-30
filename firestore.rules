@@ -1,0 +1,140 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isOwner() {
+      return isSignedIn() && getUserData().role == 'owner';
+    }
+
+    function isInventoryManager() {
+       return isSignedIn() && (getUserData().role == 'owner' || getUserData().role == 'inventory_manager');
+    }
+
+    function isCashier() {
+       return isSignedIn() && (getUserData().role == 'owner' || getUserData().role == 'cashier');
+    }
+
+    function getShopId() {
+      return getUserData().shopId;
+    }
+
+    function isStaffMember(shopId) {
+      return isSignedIn() && getShopId() == shopId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // User Profile Rules
+    match /users/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || getShopId() == existing().shopId);
+      allow list: if isSignedIn() && getShopId() == resource.data.shopId;
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update: if isSignedIn() && request.auth.uid == userId && incoming().role == existing().role; // Users can't change their own role
+      allow update: if isOwner() && getShopId() == existing().shopId; // Owners can change roles of staff
+      allow delete: if isOwner() && getShopId() == existing().shopId && request.auth.uid != userId; // Owners can delete staff but not themselves
+    }
+
+    match /invitations/{phone} {
+      // Allow getting a single invitation by phone to verify password during staff login
+      // We restrict list to owners only.
+      allow get: if true; 
+      allow list: if isOwner() && resource.data.shopId == getShopId();
+      allow create: if isOwner() && incoming().shopId == getShopId() && incoming().invitedBy == request.auth.uid;
+      allow delete: if isOwner() && existing().shopId == getShopId();
+    }
+
+    // Product Validation
+    function isValidProduct(data) {
+      return data.keys().hasAll(['name', 'price', 'stock', 'category', 'unit', 'shopId']) 
+        && data.keys().size() >= 6 && data.keys().size() <= 12
+        && data.name is string && data.name.size() <= 200
+        && data.price is number && data.price >= 0
+        && data.stock is number
+        && data.category is string && data.category.size() <= 100
+        && data.unit is string && data.unit.size() <= 50
+        && data.shopId == getShopId();
+    }
+
+    match /products/{productId} {
+      allow list: if isSignedIn() && resource.data.shopId == getShopId();
+      allow get: if isStaffMember(resource.data.shopId);
+      
+      allow create: if isInventoryManager() 
+        && isValidId(productId)
+        && isValidProduct(incoming());
+      
+      allow update: if isInventoryManager()
+        && isStaffMember(existing().shopId)
+        && isValidProduct(incoming())
+        && incoming().shopId == existing().shopId;
+      
+      allow delete: if isInventoryManager() && isStaffMember(existing().shopId);
+    }
+
+    // Sale Validation
+    function isValidSale(data) {
+      return data.keys().hasAll(['timestamp', 'totalAmount', 'shopId', 'items', 'createdBy'])
+        && data.keys().size() >= 5 && data.keys().size() <= 15
+        && data.timestamp is number
+        && data.totalAmount is number && data.totalAmount >= 0
+        && data.shopId == getShopId()
+        && data.createdBy == request.auth.uid
+        && data.items is list && data.items.size() <= 100;
+    }
+
+    match /sales/{saleId} {
+      allow list: if isSignedIn() && resource.data.shopId == getShopId();
+      allow get: if isStaffMember(resource.data.shopId);
+      
+      allow create: if isCashier()
+        && isValidId(saleId)
+        && isValidSale(incoming());
+      
+      allow update: if isOwner() && isStaffMember(existing().shopId);
+      allow delete: if isOwner() && isStaffMember(existing().shopId);
+    }
+
+    match /customers/{customerId} {
+      allow list: if isSignedIn() && resource.data.shopId == getShopId();
+      allow get: if isStaffMember(resource.data.shopId);
+      
+      allow create: if isCashier()
+        && isValidId(customerId)
+        && incoming().shopId == getShopId();
+      
+      allow update: if isCashier()
+        && isStaffMember(existing().shopId)
+        && incoming().shopId == existing().shopId;
+        
+      allow delete: if isOwner() && isStaffMember(existing().shopId);
+    }
+
+    match /shops/{shopId} {
+      allow get: if isStaffMember(shopId);
+      allow write: if isOwner() && getShopId() == shopId;
+    }
+  }
+}
