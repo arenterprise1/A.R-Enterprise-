@@ -1,10 +1,11 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Sale, ShopInfo } from '../types';
 import { formatCurrency } from '../lib/utils';
 import { format } from 'date-fns';
 import { bn, enUS } from 'date-fns/locale';
 import { Printer, X } from 'lucide-react';
 import { Language, translations } from '../translations';
+import QRCode from 'qrcode';
 
 interface ReceiptProps {
   sale: Sale;
@@ -15,6 +16,29 @@ interface ReceiptProps {
 
 export default function Receipt({ sale, shopInfo, onClose, lang }: ReceiptProps) {
   const t = translations[lang];
+  const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
+
+  useEffect(() => {
+    // Generate QR code pointing to the digital invoice
+    const generateQR = async () => {
+      try {
+        const invoiceUrl = `${window.location.origin}/?invoice=${sale.id}&shop=${sale.shopId}`;
+        const url = await QRCode.toDataURL(invoiceUrl, {
+          width: 300,
+          margin: 1,
+          color: {
+            dark: '#1e293b', // slate-800
+            light: '#ffffff'
+          }
+        });
+        setQrCodeUrl(url);
+      } catch (err) {
+        console.error('Failed to generate QR code:', err);
+      }
+    };
+    generateQR();
+  }, [sale.id, sale.shopId]);
+
   useEffect(() => {
     // Auto-trigger print when receipt is shown
     const timer = setTimeout(() => {
@@ -215,6 +239,30 @@ export default function Receipt({ sale, shopInfo, onClose, lang }: ReceiptProps)
                 <div className="border-t-[3px] border-black pt-3 w-full">
                   <p className="text-xs font-black text-black uppercase tracking-widest italic">{t.authoritySignature}</p>
                 </div>
+              </div>
+            </div>
+
+            {/* QR Code and Digital Reference Banner */}
+            <div className="mt-8 mb-4 border-2 border-dashed border-slate-300 rounded-3xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-50/50 print:bg-transparent print:border-black/30">
+              <div className="flex flex-col text-center sm:text-left gap-1">
+                <h4 className="text-sm font-black text-black tracking-tight flex items-center justify-center sm:justify-start gap-1.5 uppercase">
+                  <span>✨</span> {lang === 'bn' ? 'ডিজিটাল ইনভয়েস কিউআর কোড' : 'Digital Invoice QR Code'}
+                </h4>
+                <p className="text-xs text-slate-500 font-medium leading-relaxed max-w-sm print:text-black/80">
+                  {lang === 'bn' 
+                    ? 'আপনার ফোনে ডিজিটাল কপি দেখতে এবং যেকোনো সময় অ্যাক্সেস করতে এই কিউআর কোডটি স্ক্যান করুন।' 
+                    : 'Scan this QR code to view the digital copy on your phone and access it anytime.'}
+                </p>
+                <div className="text-[10px] font-mono text-slate-400 font-bold bg-slate-100 rounded px-2 py-0.5 mt-1 w-fit mx-auto sm:mx-0 print:hidden">
+                  ID: #{sale.id.toUpperCase()}
+                </div>
+              </div>
+              <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-sm flex-shrink-0 flex items-center justify-center print:border-black/40">
+                {qrCodeUrl ? (
+                  <img src={qrCodeUrl} className="w-24 h-24 object-contain" alt="Invoice QR Code" />
+                ) : (
+                  <div className="w-24 h-24 bg-slate-100 animate-pulse rounded-xl" />
+                )}
               </div>
             </div>
 

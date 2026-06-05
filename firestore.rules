@@ -107,7 +107,7 @@ service cloud.firestore {
 
     match /sales/{saleId} {
       allow list: if isSignedIn() && resource.data.shopId == getShopId();
-      allow get: if isStaffMember(resource.data.shopId);
+      allow get: if true; // Public access for scanning invoices via QR Code
       
       allow create: if isCashier()
         && isValidId(saleId)
@@ -133,7 +133,7 @@ service cloud.firestore {
     }
 
     match /shops/{shopId} {
-      allow get: if isStaffMember(shopId);
+      allow get: if true; // Public access to shop info for QR Code scan views
       allow write: if isOwner() && getShopId() == shopId;
     }
   }

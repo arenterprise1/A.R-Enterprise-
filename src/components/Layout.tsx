@@ -3,7 +3,7 @@ import { LayoutDashboard, Package, ShoppingCart, History, Store, Menu, X, Settin
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { View, UserProfile, UserRole } from '../types';
-import { UserMenu } from './Auth';
+import { UserMenu, AR_LOGO_BASE64 } from './Auth';
 import { Calculator } from './Calculator';
 import { Language, translations } from '../translations';
 import { Globe } from 'lucide-react';
@@ -94,12 +94,12 @@ export default function Layout({ children, activeView, onViewChange, userProfile
       >
         <div className="p-6 flex items-center justify-between">
           <div className={cn("flex items-center gap-3 overflow-hidden whitespace-nowrap", !isSidebarOpen && "hidden")}>
-            <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-xl flex items-center justify-center text-white shrink-0 shadow-lg shadow-indigo-100 p-2">
-              <svg viewBox="0 0 24 24" className="w-full h-full text-white filter drop-shadow-sm font-sans">
-                <path d="M6 18c0-1.657 1.343-3 3-3h9V5a1 1 0 0 0-1-1H9a4 4 0 0 0-4 4v10a1 1 0 0 0 1 1z" fill="#ffffff" />
-                <circle cx="14" cy="9" r="2.2" fill="#4f46e5" />
-                <rect x="10" y="12.5" width="8" height="1.5" rx="0.75" fill="#4f46e5" />
-              </svg>
+            <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center shrink-0 shadow-md p-1 border border-slate-100 overflow-hidden">
+              <img 
+                src={AR_LOGO_BASE64} 
+                alt="A.R Enterprise" 
+                className="w-full h-full object-contain"
+              />
             </div>
             <span className="font-bold text-lg tracking-tight text-slate-800">{lang === 'bn' ? 'এ.আর এন্টারপ্রাইজ' : 'A.R Enterprise'}</span>
           </div>
@@ -155,12 +155,12 @@ export default function Layout({ children, activeView, onViewChange, userProfile
             >
               <div className="p-8 flex items-center justify-between border-b-2 border-black/5">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white p-2">
-                    <svg viewBox="0 0 24 24" className="w-full h-full text-white filter drop-shadow-sm font-sans">
-                      <path d="M6 18c0-1.657 1.343-3 3-3h9V5a1 1 0 0 0-1-1H9a4 4 0 0 0-4 4v10a1 1 0 0 0 1 1z" fill="#ffffff" />
-                      <circle cx="14" cy="9" r="2.2" fill="#4f46e5" />
-                      <rect x="10" y="12.5" width="8" height="1.5" rx="0.75" fill="#4f46e5" />
-                    </svg>
+                  <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center p-1 border border-slate-100 overflow-hidden">
+                    <img 
+                      src={AR_LOGO_BASE64} 
+                      alt="A.R Enterprise" 
+                      className="w-full h-full object-contain"
+                    />
                   </div>
                   <span className="font-black text-xl tracking-tighter uppercase italic">{lang === 'bn' ? 'এ.আর এন্টারপ্রাইজ' : 'A.R Enterprise'}</span>
                 </div>
