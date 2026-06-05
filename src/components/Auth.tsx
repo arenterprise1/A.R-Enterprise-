@@ -14,6 +14,8 @@ import { Store, LogIn, UserPlus, LogOut, ArrowRight, Loader2, Chrome, Phone, Loc
 import { motion, AnimatePresence } from 'motion/react';
 import { translations, Language } from '../translations';
 
+export const AR_LOGO_BASE64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAfQAAAH0CAYAAADL1t+KAAAQAElEQVR4AeydB4BUtdbHT5Lbpm6nNxUUFbH3il0Q6xN7wYaCgCBFirCoIIqAgg0bimJZbIiiKIgKYkMRRaS3pWwvU2/PdzK4PPTzvWdhlZJxMrclJ7";
+
 interface FloatingInputProps {
   label: string;
   type: string;
@@ -301,6 +303,18 @@ export default function Auth({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="z-10 flex flex-col items-center max-w-[420px] w-full text-center px-4">
+            {/* Premium Brand Logo Header */}
+            <div className="mb-2 flex flex-col items-center gap-1.5 animate-fadeIn">
+              <div className="w-16 h-16 bg-white/20 backdrop-blur-xl rounded-2xl border-2 border-white/30 flex items-center justify-center text-white p-2 shadow-2xl overflow-hidden">
+                <img 
+                  src={AR_LOGO_BASE64} 
+                  alt="A.R Enterprise Logo" 
+                  className="w-full h-full object-contain filter drop-shadow-md rounded-lg"
+                />
+              </div>
+              <span className="text-white/60 font-black text-[10px] tracking-widest uppercase mt-1">A.R ENTERPRISE</span>
+            </div>
+
             {/* Language Switch */}
             <button 
               type="button"
@@ -326,63 +340,18 @@ export default function Auth({ children }: { children: React.ReactNode }) {
               {/* mascot clickable node */}
               <div 
                 onClick={() => setShowLoginOptions(true)}
-                className="relative z-10 w-48 h-48 rounded-full bg-white/95 backdrop-blur-sm border-4 border-white shadow-2xl flex items-center justify-center cursor-pointer transform hover:scale-105 active:scale-95 transition-all duration-300 group overflow-hidden"
+                className="relative z-10 w-48 h-48 rounded-full bg-white/95 backdrop-blur-sm border-4 border-white shadow-2xl flex items-center justify-center cursor-pointer transform hover:scale-105 active:scale-95 transition-all duration-300 group overflow-hidden p-4"
               >
-                {/* Embedded High Fidelity Anim Mascot */}
-                <svg className="w-36 h-36 animate-float-mascot" viewBox="0 0 160 160">
-                  <ellipse cx="80" cy="130" rx="30" ry="8" fill="rgba(0,0,0,0.08)" />
-
-                  {/* Body */}
-                  <rect x="50" y="65" width="60" height="55" rx="20" fill="url(#botGradient)" className="filter drop-shadow-md" />
-                  
-                  {/* Emblem */}
-                  <polygon points="80,82 92,94 80,106 68,94" fill="#FFE5A3" className="animate-pulse" />
-                  
-                  {/* Head */}
-                  <rect x="40" y="25" width="80" height="50" rx="25" fill="#FFFFFF" stroke="#9b59b6" strokeWidth="4" />
-                  
-                  {/* Screen */}
-                  <rect x="52" y="35" width="56" height="26" rx="10" fill="#2E2A36" />
-                  
-                  {/* Neon Sides */}
-                  <circle cx="38" cy="50" r="6" fill="#71b7e6" />
-                  <circle cx="122" cy="50" r="6" fill="#9b59b6" />
-
-                  {/* Blinking face */}
-                  <g className="animate-blink-face">
-                    <path d="M 60,48 C 60,45 66,45 66,48" stroke="#FFE5A3" strokeWidth="3.5" strokeLinecap="round" fill="none" />
-                    <path d="M 94,48 C 94,45 100,45 100,48" stroke="#FFE5A3" strokeWidth="3.5" strokeLinecap="round" fill="none" />
-                  </g>
-                  
-                  {/* Cheeks */}
-                  <circle cx="58" cy="54" r="3" fill="#FF8D9E" />
-                  <circle cx="102" cy="54" r="3" fill="#FF8D9E" />
-
-                  {/* Smile */}
-                  <path d="M 75,54 Q 80,59 85,54" stroke="#FFE5A3" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-
-                  {/* Waving Arm */}
-                  <path d="M 50,90 Q 30,75 25,60" stroke="#71b7e6" strokeWidth="10" strokeLinecap="round" fill="none" />
-                  <circle cx="23" cy="58" r="4" fill="#FFE5A3" className="animate-ping" />
-
-                  {/* Right arm */}
-                  <path d="M 110,90 Q 125,95 130,105" stroke="#9b59b6" strokeWidth="10" strokeLinecap="round" fill="none" />
-                  {/* Floating Bag */}
-                  <path d="M 124,105 L 138,105 L 136,118 L 126,118 Z" fill="#FFE5A3" />
-                  <path d="M 127,105 Q 131,98 135,105" stroke="#9b59b6" strokeWidth="2" fill="none" />
-
-                  {/* Antenna Indicator */}
-                  <line x1="80" y1="25" x2="80" y2="10" stroke="#9b59b6" strokeWidth="4" />
-                  <circle cx="80" cy="8" r="6" fill="#9b59b6" className="animate-ping" />
-                  <circle cx="80" cy="8" r="5" fill="#FFE5A3" />
-
-                  <defs>
-                    <linearGradient id="botGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#71b7e6" />
-                      <stop offset="100%" stopColor="#9b59b6" />
-                    </linearGradient>
-                  </defs>
-                </svg>
+                {/* Premium Animated App Logo */}
+                <div className="w-32 h-32 flex items-center justify-center relative animate-float-mascot">
+                  <img 
+                    src={AR_LOGO_BASE64} 
+                    alt="A.R Enterprise Logo" 
+                    className="w-full h-full object-contain rounded-full filter drop-shadow-xl"
+                  />
+                  {/* Subtle pulsing background behind the logo for premium asset integration */}
+                  <div className="absolute inset-0 bg-indigo-500/10 rounded-full select-none pointer-events-none -z-10 animate-ping opacity-60" style={{ animationDuration: '3s' }} />
+                </div>
                 
                 {/* Guide overlay */}
                 <div className="absolute inset-x-0 bottom-3 text-center pointer-events-none">
@@ -450,8 +419,12 @@ export default function Auth({ children }: { children: React.ReactNode }) {
           className="w-full max-w-[420px] bg-white p-8 md:p-10 rounded-2xl shadow-2xl border border-gray-100 flex flex-col"
         >
           <div className="flex flex-col items-center mb-8">
-            <div className="w-16 h-16 bg-gradient-to-br from-[#71b7e6] to-[#9b59b6] rounded-2xl flex items-center justify-center text-white mb-6 shadow-xl shadow-[#9b59b6]/20">
-              <Store size={32} />
+            <div className="w-20 h-20 bg-gradient-to-br from-[#71b7e6] to-[#9b59b6] rounded-2xl flex items-center justify-center text-white mb-6 shadow-xl shadow-[#9b59b6]/20 p-2 overflow-hidden">
+              <img 
+                src={AR_LOGO_BASE64} 
+                alt="A.R Enterprise Logo" 
+                className="w-full h-full object-contain filter drop-shadow-md rounded-xl"
+              />
             </div>
             <h1 className="text-2xl lg:text-3xl font-black italic tracking-tighter text-gray-900">
               {lang === 'bn' ? 'এ.আর এন্টারপ্রাইজ' : 'A.R Enterprise'}
