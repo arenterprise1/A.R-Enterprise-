@@ -48,6 +48,9 @@ const DEFAULT_SHOP_INFO: ShopInfo = {
 };
 
 export default function App() {
+  const urlParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+  const isInvoiceQuery = urlParams.has('invoice');
+
   const [activeView, setActiveView] = useState<View>('dashboard');
   const [lang, setLang] = useState<Language>('bn');
   const [products, setProducts] = useState<Product[]>([]);
@@ -64,6 +67,12 @@ export default function App() {
   const [publicLoading, setPublicLoading] = useState<boolean>(false);
   const [publicError, setPublicError] = useState<string>('');
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
+
+  // Custom states for generating and viewing public receipt PNG images natively
+  const [publicInvoicePng, setPublicInvoicePng] = useState<string>('');
+  const [isGeneratingPublicPng, setIsGeneratingPublicPng] = useState<boolean>(true);
+  const [viewMode, setViewMode] = useState<'png' | 'html'>('png');
+  const publicMemoRef = useRef<HTMLDivElement>(null);
 
   // States for generating and downloading PNG invoice images
   const [generatedPNG, setGeneratedPNG] = useState<string>('');
@@ -109,6 +118,33 @@ export default function App() {
 
     fetchPublicInvoice();
   }, [lang]);
+
+  // Generate high-resolution PNG of the invoice for direct client display
+  useEffect(() => {
+    if (isInvoiceQuery && publicSale && !publicLoading) {
+      const generatePng = async () => {
+        // Wait a small delay to ensure React has fully rendered the offscreen DOM
+        await new Promise((resolve) => setTimeout(resolve, 800));
+        if (publicMemoRef.current) {
+          try {
+            const dataUrl = await toPng(publicMemoRef.current, {
+              quality: 1.0,
+              pixelRatio: 2, // 2x ratio for high-density, crystal-clear mobile viewing!
+              backgroundColor: '#ffffff',
+            });
+            setPublicInvoicePng(dataUrl);
+            setIsGeneratingPublicPng(false);
+          } catch (err) {
+            console.error('Failed to generate public invoice PNG:', err);
+            // On failure, fallback to HTML view so user is never stuck!
+            setIsGeneratingPublicPng(false);
+            setViewMode('html');
+          }
+        }
+      };
+      generatePng();
+    }
+  }, [isInvoiceQuery, publicSale, publicLoading]);
 
   // Handle User Profile Initialization
   useEffect(() => {
@@ -351,16 +387,13 @@ export default function App() {
     }
   };
 
-  // Render Public Guest Invoice view if "invoice" URL search parameter is present
-  const urlParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
-  const isInvoiceQuery = urlParams.has('invoice');
-
+  // Render Public Guest Invoice view if "invoice" URL search param is present
   if (isInvoiceQuery) {
     if (publicLoading) {
       return (
-        <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 gap-4">
-          <Loader2 className="animate-spin text-indigo-600" size={40} />
-          <p className="text-sm font-bold text-slate-500 uppercase tracking-widest animate-bounce">
+        <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 gap-4">
+          <Loader2 className="animate-spin text-amber-500" size={40} />
+          <p className="text-sm font-bold text-slate-400 uppercase tracking-widest animate-pulse">
             {lang === 'bn' ? 'ডিজিটাল ইনভয়েস লোড হচ্ছে...' : 'Loading Digital Invoice...'}
           </p>
         </div>
@@ -369,21 +402,21 @@ export default function App() {
 
     if (publicError || !publicSale) {
       return (
-        <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 px-6 text-center">
-          <div className="w-16 h-16 bg-red-50 text-red-500 rounded-3xl flex items-center justify-center mb-4 border border-red-100 shadow-sm animate-pulse">
+        <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 px-6 text-center">
+          <div className="w-16 h-16 bg-red-950/40 text-red-400 rounded-3xl flex items-center justify-center mb-4 border border-red-900/40 shadow-sm animate-pulse">
             <AlertCircle size={32} />
           </div>
-          <h2 className="text-2xl font-black italic tracking-tight text-slate-900 mb-2">
+          <h2 className="text-2xl font-black italic tracking-tight text-slate-200 mb-2">
             {publicError || (lang === 'bn' ? 'ইনভয়েসটি পাওয়া যায়নি' : 'Invoice Not Found')}
           </h2>
-          <p className="text-slate-500 max-w-md text-sm mb-6">
+          <p className="text-slate-400 max-w-md text-sm mb-6">
             {lang === 'bn' 
               ? 'অনুগ্রহ করে নিশ্চিত হোন যে আপনার কিউআর কোড লিংকটি সঠিক অথবা আমাদের সাপোর্ট নাম্বারে যোগাযোগ করুন।' 
               : 'Please make sure your QR Code link is correct, or contact support for assistance.'}
           </p>
           <a 
             href="/"
-            className="px-6 py-2.5 bg-black text-white hover:scale-105 rounded-2xl font-black text-sm italic tracking-wide transition-all shadow-lg"
+            className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white hover:scale-105 rounded-2xl font-black text-sm italic tracking-wide transition-all shadow-lg"
           >
             {lang === 'bn' ? 'হোম পেজে যান' : 'Go to Homepage'}
           </a>
@@ -391,7 +424,24 @@ export default function App() {
       );
     }
 
+    if (isGeneratingPublicPng) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 gap-4 px-6 text-center">
+          <Loader2 className="animate-spin text-amber-500" size={44} />
+          <h3 className="text-lg font-black tracking-tight text-slate-200">
+            {lang === 'bn' ? 'মেমোটির ইমেজ (PNG) প্রস্তুত হচ্ছে...' : 'Preparing Invoice Image (PNG)...'}
+          </h3>
+          <p className="text-xs text-slate-400 max-w-xs leading-relaxed">
+            {lang === 'bn' 
+              ? 'আপনার মোবাইলে মেমোটির ছবি ডাউনলোড বা সেভ করার উপযোগী হাই-রেজোলিউশন সংস্করণ তৈরি করা হচ্ছে।' 
+              : 'Generating a high-resolution, mobile-friendly image version for direct offline storage and printing.'}
+          </p>
+        </div>
+      );
+    }
+
     const currentShop = publicShop || shopInfo || DEFAULT_SHOP_INFO;
+    const accentColor = currentShop.accentColor || '#4f46e5';
 
     const handleCopyLink = () => {
       try {
@@ -407,219 +457,438 @@ export default function App() {
       window.print();
     };
 
+    const handleDownloadPng = () => {
+      const link = document.createElement('a');
+      link.download = `Invoice-${publicSale.id.slice(0, 8).toUpperCase()}.png`;
+      link.href = publicInvoicePng;
+      link.click();
+    };
+
     return (
-      <div className="min-h-screen bg-slate-100/80 py-8 md:py-16 px-4 md:px-6 font-sans relative antialiased print:p-0 print:bg-white selection:bg-indigo-500 selection:text-white">
+      <div className="min-h-screen bg-slate-950 py-8 px-4 font-sans relative antialiased selection:bg-indigo-500 selection:text-white">
         
-        {/* Top Navbar actions - Hidden on print */}
-        <div className="max-w-2xl mx-auto mb-6 flex items-center justify-between print:hidden">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-white rounded-xl shadow-sm border border-slate-200 flex items-center justify-center overflow-hidden">
-              <img src={AR_LOGO_BASE64} alt="A.R Logo" className="w-6 h-6 object-contain" />
-            </div>
-            <span className="font-extrabold text-sm text-slate-700 tracking-tight">{lang === 'bn' ? 'এ.আর এন্টারপ্রাইজ' : 'A.R Enterprise'}</span>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            {/* Language Switcher */}
-            <button 
-              onClick={() => setLang(lang === 'bn' ? 'en' : 'bn')}
-              className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 active:scale-95 transition-all text-xs font-bold text-slate-600 flex items-center gap-1.5 shadow-sm"
-            >
-              <Globe size={14} />
-              {lang === 'bn' ? 'English' : 'বাংলা'}
-            </button>
-
-            <button 
-              onClick={handleCopyLink}
-              className={`px-3 py-1.5 rounded-xl border font-bold text-xs flex items-center gap-1.5 transition-all active:scale-95 shadow-sm ${
-                copiedLink 
-                  ? 'bg-emerald-50 text-emerald-600 border-emerald-200' 
-                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-              }`}
-            >
-              <Share2 size={14} />
-              {copiedLink ? (lang === 'bn' ? 'কপি হয়েছে' : 'Copied!') : (lang === 'bn' ? 'শেয়ার লিংক' : 'Share Link')}
-            </button>
-            <button 
-              onClick={handlePrintInvoice}
-              className="px-4 py-1.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 active:scale-95 transition-all font-bold text-xs flex items-center gap-1.5 shadow-md shadow-indigo-100"
-            >
-              <Printer size={14} />
-              {lang === 'bn' ? 'প্রিন্ট / পিডিএফ' : 'Print / PDF'}
-            </button>
-          </div>
-        </div>
-
-        {/* Outer Receipt Document Paper Wrapper */}
-        <div className="max-w-2xl mx-auto bg-white rounded-[32px] overflow-hidden shadow-xl border border-slate-200/60 print:shadow-none print:border-none relative">
-          
-          {/* Top Banner indicating verified official transaction status */}
-          <div className="bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border-b border-emerald-500/20 px-6 md:px-8 py-3.5 flex items-center justify-between gap-4 print:hidden animate-fadeIn">
-            <div className="flex items-center gap-2 text-emerald-700">
-              <CheckCircle2 size={16} className="shrink-0" />
-              <p className="text-xs font-black uppercase tracking-wider">
-                {lang === 'bn' ? 'অফিসিয়াল ডিজিটাল ভেরিফাইড মেমো' : 'Official Digitally Verified Memo'}
-              </p>
-            </div>
-            <div className="text-[10px] font-mono font-bold text-slate-500 bg-white/80 border border-slate-200 px-2 py-0.5 rounded-full shadow-sm">
-              TOKEN OK
-            </div>
-          </div>
-
-          <div className="p-8 md:p-12 relative overflow-hidden">
+        {/* Hidden Container - absolutely required to generate the crisp PNG of the receipt */}
+        <div className="absolute top-0 left-[-9999px] select-none pointer-events-none" style={{ width: '640px' }}>
+          <div ref={publicMemoRef} className="bg-white p-8 font-sans text-sm relative" style={{ width: '640px' }}>
             {/* Watermark Logo */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.03] print:opacity-[0.06] z-0">
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.03] z-0">
               <img 
-                src={AR_LOGO_BASE64} 
+                src={currentShop.logoUrl || AR_LOGO_BASE64} 
                 alt="Watermark Logo" 
-                className="w-4/5 h-auto object-contain grayscale"
+                className="w-4/5 h-auto object-contain grayscale animate-pulse"
               />
             </div>
 
             <div className="relative z-10">
-              {/* Receipt Header Section */}
-              <div className="relative mb-8 pb-6 border-b-2 border-slate-900/10 flex flex-col sm:flex-row justify-between items-start gap-6">
+              {/* Header */}
+              <div className="relative mb-6 pb-4 border-b-2 flex justify-between items-start gap-6 animate-fadeIn" style={{ borderColor: `${accentColor}20` }}>
                 <div>
-                  <div className="w-16 h-16 bg-slate-50 rounded-[20px] flex items-center justify-center p-1.5 border border-slate-100 shadow-md ring-4 ring-slate-100/50 mb-4 overflow-hidden">
-                    <img src={AR_LOGO_BASE64} alt="Logo" className="w-full h-full object-contain" />
+                  <div className="w-14 h-14 bg-slate-50 rounded-[16px] flex items-center justify-center p-1.5 border border-slate-100 shadow-sm ring-4 ring-slate-100/50 mb-3 overflow-hidden">
+                    {currentShop.logoUrl ? (
+                      <img src={currentShop.logoUrl} alt="Logo" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-slate-400 font-extrabold text-lg select-none bg-slate-100">
+                        {currentShop.name.charAt(0)}
+                      </div>
+                    )}
                   </div>
-                  <h1 className="text-3xl md:text-4xl font-black tracking-tighter uppercase text-slate-900 leading-none mb-1.5">{currentShop.name}</h1>
-                  <p className="text-slate-500 text-xs font-bold uppercase tracking-wider leading-relaxed pr-6">{currentShop.address}</p>
+                  <h1 className="text-2xl font-black tracking-tighter uppercase leading-none mb-1" style={{ color: accentColor }}>{currentShop.name}</h1>
+                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider leading-relaxed pr-6">{currentShop.address}</p>
                 </div>
 
-                <div className="sm:text-right mt-2 sm:mt-0 flex flex-col gap-1 sm:items-end">
-                  <div className="border border-slate-900 bg-slate-900 text-white font-extrabold text-xs tracking-widest px-4 py-1 rounded-xl w-fit">
+                <div className="text-right mt-2 flex flex-col gap-1 items-end">
+                  <div className="text-white font-extrabold text-[10px] tracking-widest px-3 py-1 rounded-lg w-fit" style={{ backgroundColor: accentColor }}>
                     {lang === 'bn' ? 'ক্যাশ মেমো' : 'CASH MEMO'}
                   </div>
-                  <div className="mt-4 text-slate-600 font-bold text-xs italic">
+                  <div className="mt-2 text-slate-600 font-bold text-[10px] italic">
                     {lang === 'bn' ? 'ইনভয়েস নং' : 'Invoice'}: #{publicSale.id.slice(0, 8).toUpperCase()}
                   </div>
-                  <div className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wide">
+                  <div className="text-[9px] text-slate-400 font-extrabold uppercase tracking-wide">
                     {format(new Date(publicSale.timestamp), 'dd MMMM yyyy, hh:mm a', { locale: lang === 'bn' ? bn : enUS })}
                   </div>
                 </div>
               </div>
 
-              {/* Customer and Contact Actions Row */}
-              <div className="mb-8 grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50/50 border border-slate-100 rounded-3xl p-6 print:bg-transparent print:border-none print:p-0 print:mb-6">
-                <div className="space-y-1">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">{lang === 'bn' ? 'ক্রেতার বিবরণ' : 'Customer Details'}</span>
-                  {publicSale.customerName ? (
-                    <p className="text-lg font-black text-slate-800 leading-none uppercase">{publicSale.customerName}</p>
-                  ) : (
-                    <p className="text-lg font-extrabold text-slate-400 leading-none italic">{lang === 'bn' ? 'বেনামী ক্রেতা' : 'Anonymous Customer'}</p>
-                  )}
-                  {publicSale.customerPhone && <p className="text-xs text-slate-500 font-bold">{lang === 'bn' ? 'ফোন' : 'Mobile'}: {publicSale.customerPhone}</p>}
-                  {publicSale.customerAddress && <p className="text-xs text-slate-500 max-w-[280px] leading-relaxed italic">{publicSale.customerAddress}</p>}
-                </div>
-
-                <div className="flex flex-col gap-2.5 md:items-end justify-center print:hidden">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block self-start md:self-auto">{lang === 'bn' ? 'সাহায্য ও যোগাযোগ' : 'Support & Contact'}</span>
-                  <div className="flex gap-2">
-                    <a 
-                      href={`tel:${currentShop.phone}`}
-                      className="px-3.5 py-2 bg-indigo-50 text-indigo-600 text-xs font-bold rounded-2xl border border-indigo-100 hover:bg-indigo-100 transition-all flex items-center gap-1.5 shadow-sm"
-                    >
-                      <PhoneCall size={12} />
-                      {lang === 'bn' ? 'কল করুন' : 'Call Shop'}
-                    </a>
-                    <a 
-                      href={`https://maps.google.com/?q=${encodeURIComponent(currentShop.address)}`}
-                      target="_blank"
-                      rel="referrer noopener"
-                      className="px-3.5 py-2 bg-slate-50 text-slate-600 text-xs font-bold rounded-2xl border border-slate-200 hover:bg-slate-100 transition-all flex items-center gap-1.5 shadow-sm"
-                    >
-                      <MapPin size={12} />
-                      {lang === 'bn' ? 'ঠিকানা দেখুন' : 'Get Location'}
-                    </a>
-                  </div>
-                </div>
+              {/* Customer Info */}
+              <div className="mb-6 bg-slate-50 border border-slate-100 rounded-2xl p-4">
+                <span className="text-[9px] font-black uppercase tracking-widest block mb-1" style={{ color: accentColor }}>{lang === 'bn' ? 'ক্রেতার বিবরণ' : 'Customer Details'}</span>
+                {publicSale.customerName ? (
+                  <p className="text-base font-black text-slate-800 leading-none uppercase">{publicSale.customerName}</p>
+                ) : (
+                  <p className="text-base font-extrabold text-slate-400 leading-none italic">{lang === 'bn' ? 'বেনামী ক্রেতা' : 'Anonymous Customer'}</p>
+                )}
+                {publicSale.customerPhone && <p className="text-xs text-slate-500 font-bold">{lang === 'bn' ? 'ফোন' : 'Mobile'}: {publicSale.customerPhone}</p>}
+                {publicSale.customerAddress && <p className="text-[11px] text-slate-400 leading-relaxed italic mt-0.5">{publicSale.customerAddress}</p>}
               </div>
 
-              {/* Items Table */}
-              <div className="mb-8 rounded-3xl border-2 border-slate-900 overflow-hidden shadow-sm">
-                <table className="w-full border-collapse">
+              {/* Table */}
+              <div className="mb-6 rounded-2xl border-2 overflow-hidden" style={{ borderColor: accentColor }}>
+                <table className="w-full border-collapse text-xs">
                   <thead>
-                    <tr className="bg-slate-900 text-white">
-                      <th className="px-4 py-3.5 text-left italic text-xs font-black uppercase tracking-wider border-r border-slate-800">#</th>
-                      <th className="px-6 py-3.5 text-left italic text-xs font-black uppercase tracking-wider border-r border-slate-800">{lang === 'bn' ? 'বিবরণ' : 'Description'}</th>
-                      <th className="px-4 py-3.5 text-center italic text-xs font-black uppercase tracking-wider border-r border-slate-800">{lang === 'bn' ? 'পরিমাণ' : 'Qty'}</th>
-                      <th className="px-6 py-3.5 text-right italic text-xs font-black uppercase tracking-wider border-r border-slate-800">{lang === 'bn' ? 'দর' : 'Rate'}</th>
-                      <th className="px-6 py-3.5 text-right italic text-xs font-black uppercase tracking-wider">{lang === 'bn' ? 'মোট' : 'Total'}</th>
+                    <tr className="text-white animate-fadeIn" style={{ backgroundColor: accentColor }}>
+                      <th className="px-3 py-2 text-left italic font-black uppercase border-r" style={{ borderColor: `${accentColor}15` }}>#</th>
+                      <th className="px-4 py-2 text-left italic font-black uppercase border-r" style={{ borderColor: `${accentColor}15` }}>{lang === 'bn' ? 'বিবরণ' : 'Description'}</th>
+                      <th className="px-3 py-2 text-center italic font-black uppercase border-r" style={{ borderColor: `${accentColor}15` }}>{lang === 'bn' ? 'পরিমাণ' : 'Qty'}</th>
+                      <th className="px-4 py-2 text-right italic font-black uppercase border-r" style={{ borderColor: `${accentColor}15` }}>{lang === 'bn' ? 'দর' : 'Rate'}</th>
+                      <th className="px-4 py-2 text-right italic font-black uppercase">{lang === 'bn' ? 'মোট' : 'Total'}</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y-2 divide-slate-900/10">
+                  <tbody className="divide-y" style={{ borderColor: `${accentColor}20` }}>
                     {publicSale.items.map((item, idx) => {
                       const rate = item.total / item.quantity;
                       return (
                         <tr key={idx} className="bg-white">
-                          <td className="px-4 py-3 text-xs font-bold text-slate-500 border-r border-slate-100">{idx + 1}</td>
-                          <td className="px-6 py-3 border-r border-slate-100">
+                          <td className="px-3 py-2 font-bold text-slate-500 border-r border-slate-100">{idx + 1}</td>
+                          <td className="px-4 py-2 border-r border-slate-100">
                             <p className="font-extrabold text-slate-900 text-sm leading-tight uppercase">{item.productName}</p>
                             {item.warranty && (
-                              <p className="text-[10px] font-black text-rose-500 mt-0.5 italic tracking-tight uppercase">🛡️ {lang === 'bn' ? 'ওয়ারেন্টি' : 'Warranty'}: {item.warranty}</p>
+                              <p className="text-[9px] font-black text-rose-500 mt-0.5 italic tracking-tight uppercase">🛡️ {lang === 'bn' ? 'ওয়ারেন্টি' : 'Warranty'}: {item.warranty}</p>
                             )}
                           </td>
-                          <td className="px-4 py-3 text-center font-extrabold text-slate-700 border-r border-slate-100">{item.quantity}</td>
-                          <td className="px-6 py-3 text-right font-bold text-slate-700 border-r border-slate-100">{formatCurrency(rate)}</td>
-                          <td className="px-6 py-3 text-right font-black text-slate-900">{formatCurrency(item.total)}</td>
+                          <td className="px-3 py-2 text-center font-extrabold text-slate-700 border-r border-slate-100">{item.quantity}</td>
+                          <td className="px-4 py-2 text-right font-bold text-slate-700 border-r border-slate-100">{formatCurrency(rate)}</td>
+                          <td className="px-4 py-2 text-right font-black text-slate-900">{formatCurrency(item.total)}</td>
                         </tr>
                       );
                     })}
                   </tbody>
                   <tfoot>
-                    <tr className="bg-slate-50 border-t-[3px] border-slate-900">
-                      <td colSpan={2} className="px-6 py-3.5 text-right text-xs font-black italic uppercase tracking-wider border-r border-slate-100">
-                        {lang === 'bn' ? 'মোট পণ্য সংখ্যা' : 'No of Items'}:
-                      </td>
-                      <td className="px-4 py-3.5 text-center font-black border-r border-slate-100 text-slate-800">
-                        {publicSale.items.length}
-                      </td>
-                      <td className="px-6 py-3.5 text-right text-xs font-black italic uppercase tracking-wider border-r border-slate-100">{lang === 'bn' ? 'সাবটোটাল' : 'Subtotal'}:</td>
-                      <td className="px-6 py-3.5 text-right font-black text-slate-900 text-base">
-                        {formatCurrency(publicSale.totalAmount)}
-                      </td>
+                    <tr className="bg-slate-50 border-t-2" style={{ borderColor: accentColor }}>
+                      <td colSpan={2} className="px-4 py-2.5 text-right text-[10px] font-black italic uppercase border-r border-slate-100">{lang === 'bn' ? 'মোট পণ্য সংখ্যা' : 'No of Items'}:</td>
+                      <td className="px-3 py-2.5 text-center font-black border-r border-slate-100 text-slate-800">{publicSale.items.length}</td>
+                      <td className="px-4 py-2.5 text-right text-[10px] font-black italic uppercase border-r border-slate-100">{lang === 'bn' ? 'সাবটোটাল' : 'Subtotal'}:</td>
+                      <td className="px-4 py-2.5 text-right font-black text-slate-900">{formatCurrency(publicSale.totalAmount)}</td>
                     </tr>
                     {(publicSale.discount || 0) > 0 && (
                       <tr className="bg-slate-50">
-                        <td colSpan={4} className="px-6 py-2.5 text-right text-xs font-black italic uppercase tracking-wider border-r border-slate-100">{lang === 'bn' ? 'ডিসকাউন্ট' : 'Discount'}:</td>
-                        <td className="px-6 py-2.5 text-right font-black text-red-500 text-base">
-                          - {formatCurrency(publicSale.discount)}
-                        </td>
+                        <td colSpan={4} className="px-4 py-2 text-right text-[10px] font-black italic uppercase border-r border-slate-100">{lang === 'bn' ? 'ডিসকাউন্ট' : 'Discount'}:</td>
+                        <td className="px-4 py-2 text-right font-black text-red-500">- {formatCurrency(publicSale.discount)}</td>
                       </tr>
                     )}
-                    <tr className="bg-slate-900 text-white">
-                      <td colSpan={4} className="px-6 py-4 text-right text-xs font-black italic uppercase leading-none tracking-widest">{lang === 'bn' ? 'পরিশোধযোগ্য মোট' : 'Payable Total'}:</td>
-                      <td className="px-6 py-4 text-right font-black text-xl whitespace-nowrap leading-none text-amber-300">
-                        {formatCurrency(publicSale.payableAmount || (publicSale.totalAmount - (publicSale.discount || 0)))}
-                      </td>
+                    <tr className="text-white" style={{ backgroundColor: accentColor }}>
+                      <td colSpan={4} className="px-4 py-3 text-right text-[10px] font-black italic uppercase tracking-wider">{lang === 'bn' ? 'পরিশোধযোগ্য মোট' : 'Payable Total'}:</td>
+                      <td className="px-4 py-3 text-right font-black text-amber-300">{formatCurrency(publicSale.payableAmount || (publicSale.totalAmount - (publicSale.discount || 0)))}</td>
                     </tr>
                   </tfoot>
                 </table>
               </div>
 
-              {/* Digital Footer signatures and thank messages */}
-              <div className="mt-16 pt-8 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-10">
-                <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100">
-                  <h4 className="text-xs font-black uppercase text-slate-800 mb-1 tracking-tight">📜 {lang === 'bn' ? 'ক্রয় নীতিমালা' : 'Return Policy'}</h4>
-                  <p className="text-[10px] text-slate-500 leading-relaxed italic uppercase font-medium">
-                    {lang === 'bn' 
-                      ? 'ক্রয়কৃত পণ্য ক্রয়ের ৭ দিনের মধ্যে ওয়ারেন্টি এবং পরিবর্তনের যোগ্য। পরিবর্তনের সময় অবশ্যই এই মেমো প্রদর্শন করতে হবে।'
-                      : 'Purchased hardware components are eligible for warranty within 7 days of purchase. Invoice copy must be presented.'}
-                  </p>
+              {/* Policy & Signatures */}
+              <div className="mt-12 grid grid-cols-2 gap-8 text-center text-slate-900">
+                <div>
+                  <div className="border-t pt-1.5" style={{ borderColor: `${accentColor}20` }}>
+                    <p className="text-[9px] font-black uppercase tracking-widest italic">{lang === 'bn' ? 'ক্রেতার স্বাক্ষর' : 'Customer Signature'}</p>
+                  </div>
                 </div>
-                
-                <div className="flex flex-col items-center justify-end text-center p-2">
-                  <p className="text-sm font-black text-slate-800 leading-relaxed italic">{lang === 'bn' ? 'আমাদের দোকানে কেনাকাটার জন্য আপনাকে ধন্যবাদ।' : 'Thank you for choosing A.R Enterprise!'}</p>
-                  <p className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest mt-1">
-                    {lang === 'bn' ? 'ডিজিটাল কপি • সুরক্ষিত ডেটা' : 'ORIGINAL SECURED MEMO'}
+                <div className="flex flex-col items-center">
+                  <p className="text-2xl font-normal text-blue-900 tracking-tighter transform -rotate-2 select-none h-8 opacity-90" style={{ fontFamily: '"Great Vibes", cursive' }}>
+                    Rabbi
                   </p>
+                  <div className="border-t-2 pt-1.5 w-full" style={{ borderColor: accentColor }}>
+                    <p className="text-[9px] font-black uppercase tracking-widest italic">{lang === 'bn' ? 'কর্তৃপক্ষের স্বাক্ষর' : 'Authority Signature'}</p>
+                  </div>
                 </div>
               </div>
 
+              <div className="mt-8 border-t border-slate-100 pt-4 flex justify-between items-center text-[10px] text-slate-500">
+                <p className="italic uppercase font-medium max-w-[340px] text-left">
+                  {lang === 'bn' 
+                    ? 'ক্রয়কৃত পণ্য ক্রয়ের ৭ দিনের মধ্যে ওয়ারেন্টি এবং পরিবর্তনের যোগ্য। মেমো অবশ্যই প্রদর্শন করতে হবে।'
+                    : 'Warranty within 7 days of purchase only with original invoice.'}
+                </p>
+                <div className="text-right">
+                  <p className="font-bold text-slate-700">{lang === 'bn' ? 'আমাদের দোকানে কেনাকাটার জন্য ধন্যবাদ।' : 'Thank you for shopping with us!'}</p>
+                  <p className="text-[8px] tracking-wider text-slate-400 uppercase mt-0.5">ORIGINAL SECURED MEMO</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
+
+        {/* Dynamic Multi-Mode Client Interface */}
+        {viewMode === 'png' ? (
+          <div className="max-w-md mx-auto space-y-4">
+            {/* Header branding */}
+            <div className="flex items-center justify-between px-2">
+              <div className="flex items-center gap-2">
+                {currentShop.logoUrl ? (
+                  <img src={currentShop.logoUrl} alt="Logo" className="w-6 h-6 object-contain rounded-md" referrerPolicy="no-referrer" />
+                ) : (
+                  <Sparkles className="shrink-0" size={16} style={{ color: accentColor }} />
+                )}
+                <span className="font-black text-xs text-slate-300 tracking-wider">
+                  {currentShop.name}
+                </span>
+              </div>
+              <button 
+                onClick={() => setLang(lang === 'bn' ? 'en' : 'bn')}
+                className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-[10px] font-extrabold text-slate-200 rounded-xl transition-all"
+              >
+                {lang === 'bn' ? 'English' : 'বাংলা'}
+              </button>
+            </div>
+
+            {/* Core Box containing PNG preview and instructions */}
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl relative overflow-hidden flex flex-col items-center">
+              {/* Top Banner */}
+              <div className="w-full flex justify-between items-center mb-4 bg-emerald-500/10 border border-emerald-500/20 px-3.5 py-2 rounded-2xl">
+                <div className="flex items-center gap-2" style={{ color: accentColor }}>
+                  <CheckCircle2 className="shrink-0" size={14} />
+                  <p className="text-[9px] font-black uppercase tracking-wider">
+                    {lang === 'bn' ? 'মেমো ইমেজ (PNG)' : 'MEMO IMAGE (PNG)'}
+                  </p>
+                </div>
+                <div className="text-[9px] font-mono font-bold" style={{ color: accentColor }}>
+                  ID: #{publicSale.id.slice(0, 8).toUpperCase()}
+                </div>
+              </div>
+
+              {/* Guide */}
+              <p className="text-xs text-slate-300 font-medium text-center mb-5 leading-relaxed max-w-sm">
+                {lang === 'bn' 
+                  ? 'নিচের বোতাম চেপে মোবাইলে ক্যাশ মেমোটির ছবি ডাউনলোড করুন অথবা ছবির উপর কিছুক্ষণ চাপ দিয়ে ধরে রাখতে পারেন।' 
+                  : 'Tap download below to save the invoice, or press and hold the picture to save/share.'}
+              </p>
+
+              {/* Crisp PNG Viewer */}
+              <div className="w-full bg-white rounded-2xl overflow-hidden shadow-2xl ring-4 ring-black/40 relative max-h-[60vh] overflow-y-auto">
+                <img 
+                  src={publicInvoicePng} 
+                  alt={`${currentShop.name} Invoice PNG`} 
+                  className="w-full h-auto object-contain cursor-zoom-in"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="w-full mt-6 space-y-3">
+                <button 
+                  onClick={handleDownloadPng}
+                  className="w-full py-4 text-white hover:scale-[1.01] active:scale-95 rounded-2xl font-black text-sm tracking-wide transition-all shadow-lg flex items-center justify-center gap-2"
+                  style={{ backgroundColor: accentColor }}
+                >
+                  <Download size={16} />
+                  {lang === 'bn' ? 'মেমো পিকচার লাভ করুন (PNG)' : 'Download Receipt Image'}
+                </button>
+                
+                <button 
+                  onClick={() => setViewMode('html')}
+                  className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-2xl font-bold text-xs tracking-wider transition-all flex items-center justify-center gap-1.5"
+                >
+                  <Globe size={14} />
+                  {lang === 'bn' ? 'ডিজিটাল ওয়েব সংস্করণ দেখুন' : 'Switch to Digital Web View'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* High-density HTML interactive web view */
+          <div className="max-w-2xl mx-auto space-y-4">
+            
+            {/* Nav containing switches/actions */}
+            <div className="flex items-center justify-between px-2 print:hidden">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-slate-900 rounded-xl border border-slate-800 flex items-center justify-center overflow-hidden">
+                  <img src={AR_LOGO_BASE64} alt="A.R Logo" className="w-6 h-6 object-contain" />
+                </div>
+                <span className="font-extrabold text-xs text-slate-300 tracking-tight">{lang === 'bn' ? 'এ.আর এন্টারপ্রাইজ' : 'A.R Enterprise'}</span>
+              </div>
+              
+              <div className="flex items-center gap-1.5">
+                <button 
+                  onClick={() => setViewMode('png')}
+                  className="px-3 py-1.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 text-xs font-black flex items-center gap-1 shadow-md"
+                >
+                  <Image size={14} />
+                  {lang === 'bn' ? 'ছবি ও ডাউনলোড (PNG)' : 'Image Mode'}
+                </button>
+                <button 
+                  onClick={() => setLang(lang === 'bn' ? 'en' : 'bn')}
+                  className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-[10px] font-bold text-slate-200 rounded-xl transition-all shadow-sm"
+                >
+                  {lang === 'bn' ? 'English' : 'বাংলা'}
+                </button>
+                <button 
+                  onClick={handleCopyLink}
+                  className={`px-3 py-1.5 rounded-xl border font-bold text-xs flex items-center gap-1.5 transition-all active:scale-95 shadow-sm ${
+                    copiedLink 
+                      ? 'bg-emerald-900/40 text-emerald-300 border-emerald-800' 
+                      : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                  }`}
+                >
+                  <Share2 size={13} />
+                  {copiedLink ? (lang === 'bn' ? 'কপি হয়েছে' : 'Copied!') : (lang === 'bn' ? 'শেয়ার' : 'Share')}
+                </button>
+                <button 
+                  onClick={handlePrintInvoice}
+                  className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl active:scale-95 transition-all font-bold text-xs flex items-center gap-1.5 shadow-sm border border-slate-700"
+                >
+                  <Printer size={13} />
+                  {lang === 'bn' ? 'প্রিন্ট' : 'Print'}
+                </button>
+              </div>
+            </div>
+
+            {/* Document wrapper */}
+            <div className="bg-white rounded-[32px] overflow-hidden shadow-2xl border border-slate-900 print:shadow-none print:border-none relative animate-fadeIn">
+              
+              <div className="bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border-b border-emerald-500/20 px-6 md:px-8 py-3 flex items-center justify-between gap-4 print:hidden">
+                <div className="flex items-center gap-2 text-emerald-700 font-extrabold text-xs">
+                  <CheckCircle2 size={14} className="shrink-0" />
+                  <p className="uppercase tracking-wider">
+                    {lang === 'bn' ? 'অফিসিয়াল ডিজিটাল ভেরিফাইড মেমো' : 'Official Digitally Verified Memo'}
+                  </p>
+                </div>
+                <div className="text-[10px] font-mono font-bold text-slate-500 bg-white/80 border border-slate-200 px-2 py-0.5 rounded-full shadow-sm">
+                  VERIFIED
+                </div>
+              </div>
+
+              <div className="p-8 md:p-12 relative overflow-hidden">
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.03] print:opacity-[0.06] z-0">
+                  <img 
+                    src={AR_LOGO_BASE64} 
+                    alt="Watermark Logo" 
+                    className="w-4/5 h-auto object-contain grayscale"
+                  />
+                </div>
+
+                <div className="relative z-10 text-slate-900">
+                  {/* Header */}
+                  <div className="relative mb-8 pb-6 border-b-2 border-slate-900/10 flex flex-col sm:flex-row justify-between items-start gap-6">
+                    <div>
+                      <div className="w-16 h-16 bg-slate-50 rounded-[20px] flex items-center justify-center p-1.5 border border-slate-100 shadow-md ring-4 ring-slate-100/50 mb-4 overflow-hidden">
+                        <img src={AR_LOGO_BASE64} alt="Logo" className="w-full h-full object-contain" />
+                      </div>
+                      <h1 className="text-3xl md:text-4xl font-black tracking-tighter uppercase text-slate-900 leading-none mb-1.5">{currentShop.name}</h1>
+                      <p className="text-slate-500 text-xs font-bold uppercase tracking-wider leading-relaxed pr-6">{currentShop.address}</p>
+                    </div>
+
+                    <div className="sm:text-right mt-2 sm:mt-0 flex flex-col gap-1 sm:items-end">
+                      <div className="border border-slate-900 bg-slate-900 text-white font-extrabold text-xs tracking-widest px-4 py-1 rounded-xl w-fit">
+                        {lang === 'bn' ? 'ক্যাশ মেমো' : 'CASH MEMO'}
+                      </div>
+                      <div className="mt-4 text-slate-600 font-bold text-xs italic">
+                        {lang === 'bn' ? 'ইনভয়েস নং' : 'Invoice'}: #{publicSale.id.slice(0, 8).toUpperCase()}
+                      </div>
+                      <div className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wide">
+                        {format(new Date(publicSale.timestamp), 'dd MMMM yyyy, hh:mm a', { locale: lang === 'bn' ? bn : enUS })}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Customer details */}
+                  <div className="mb-8 grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50/50 border border-slate-100 rounded-3xl p-6 print:bg-transparent print:border-none print:p-0 print:mb-6">
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">{lang === 'bn' ? 'ক্রেতার বিবরণ' : 'Customer Details'}</span>
+                      {publicSale.customerName ? (
+                        <p className="text-lg font-black text-slate-800 leading-none uppercase">{publicSale.customerName}</p>
+                      ) : (
+                        <p className="text-lg font-extrabold text-slate-400 leading-none italic">{lang === 'bn' ? 'বেনামী ক্রেতা' : 'Anonymous Customer'}</p>
+                      )}
+                      {publicSale.customerPhone && <p className="text-xs text-slate-500 font-bold">{lang === 'bn' ? 'ফোন' : 'Mobile'}: {publicSale.customerPhone}</p>}
+                      {publicSale.customerAddress && <p className="text-xs text-slate-500 max-w-[280px] leading-relaxed italic">{publicSale.customerAddress}</p>}
+                    </div>
+
+                    <div className="flex flex-col gap-2.5 md:items-end justify-center print:hidden">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block self-start md:self-auto">{lang === 'bn' ? 'সাহায্য ও যোগাযোগ' : 'Support & Contact'}</span>
+                      <div className="flex gap-2">
+                        <a 
+                          href={`tel:${currentShop.phone}`}
+                          className="px-3.5 py-2 bg-indigo-50 text-indigo-600 text-xs font-bold rounded-2xl border border-indigo-100 hover:bg-indigo-100 transition-all flex items-center gap-1.5 shadow-sm"
+                        >
+                          <PhoneCall size={12} />
+                          {lang === 'bn' ? 'কল করুন' : 'Call Shop'}
+                        </a>
+                        <a 
+                          href={`https://maps.google.com/?q=${encodeURIComponent(currentShop.address)}`}
+                          target="_blank"
+                          rel="referrer noopener"
+                          className="px-3.5 py-2 bg-slate-50 text-slate-600 text-xs font-bold rounded-2xl border border-slate-200 hover:bg-slate-100 transition-all flex items-center gap-1.5 shadow-sm"
+                        >
+                          <MapPin size={12} />
+                          {lang === 'bn' ? 'ঠিকানা দেখুন' : 'Get Location'}
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Table */}
+                  <div className="mb-8 rounded-3xl border-2 border-slate-900 overflow-hidden shadow-sm">
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr className="bg-slate-900 text-white">
+                          <th className="px-4 py-3.5 text-left italic text-xs font-black uppercase tracking-wider border-r border-slate-800">#</th>
+                          <th className="px-6 py-3.5 text-left italic text-xs font-black uppercase tracking-wider border-r border-slate-800">{lang === 'bn' ? 'বিবরণ' : 'Description'}</th>
+                          <th className="px-4 py-3.5 text-center italic text-xs font-black uppercase tracking-wider border-r border-slate-800">{lang === 'bn' ? 'পরিমাণ' : 'Qty'}</th>
+                          <th className="px-6 py-3.5 text-right italic text-xs font-black uppercase tracking-wider border-r border-slate-800">{lang === 'bn' ? 'দর' : 'Rate'}</th>
+                          <th className="px-6 py-3.5 text-right italic text-xs font-black uppercase tracking-wider">{lang === 'bn' ? 'মোট' : 'Total'}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y-2 divide-slate-900/10">
+                        {publicSale.items.map((item, idx) => {
+                          const rate = item.total / item.quantity;
+                          return (
+                            <tr key={idx} className="bg-white">
+                              <td className="px-4 py-3 text-xs font-bold text-slate-500 border-r border-slate-100">{idx + 1}</td>
+                              <td className="px-6 py-3 border-r border-slate-100">
+                                <p className="font-extrabold text-slate-900 text-sm leading-tight uppercase">{item.productName}</p>
+                                {item.warranty && (
+                                  <p className="text-[10px] font-black text-rose-500 mt-0.5 italic tracking-tight uppercase">🛡️ {lang === 'bn' ? 'ওয়ারেন্টি' : 'Warranty'}: {item.warranty}</p>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-center font-extrabold text-slate-700 border-r border-slate-100">{item.quantity}</td>
+                              <td className="px-6 py-3 text-right font-bold text-slate-700 border-r border-slate-100">{formatCurrency(rate)}</td>
+                              <td className="px-6 py-3 text-right font-black text-slate-900">{formatCurrency(item.total)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-slate-50 border-t-[3px] border-slate-900">
+                          <td colSpan={2} className="px-6 py-3.5 text-right text-xs font-black italic uppercase tracking-wider border-r border-slate-100">{lang === 'bn' ? 'মোট পণ্য সংখ্যা' : 'No of Items'}:</td>
+                          <td className="px-4 py-3.5 text-center font-black border-r border-slate-100 text-slate-800">{publicSale.items.length}</td>
+                          <td className="px-6 py-3.5 text-right text-xs font-black italic uppercase tracking-wider border-r border-slate-100">{lang === 'bn' ? 'সাবটোটাল' : 'Subtotal'}:</td>
+                          <td className="px-6 py-3.5 text-right font-black text-slate-900 text-base">{formatCurrency(publicSale.totalAmount)}</td>
+                        </tr>
+                        {(publicSale.discount || 0) > 0 && (
+                          <tr className="bg-slate-50">
+                            <td colSpan={4} className="px-6 py-2.5 text-right text-xs font-black italic uppercase tracking-wider border-r border-slate-100">{lang === 'bn' ? 'ডিসকাউন্ট' : 'Discount'}:</td>
+                            <td className="px-6 py-2.5 text-right font-black text-red-500 text-base">- {formatCurrency(publicSale.discount)}</td>
+                          </tr>
+                        )}
+                        <tr className="bg-slate-900 text-white">
+                          <td colSpan={4} className="px-6 py-4 text-right text-xs font-black italic uppercase leading-none tracking-widest">{lang === 'bn' ? 'পরিশোধযোগ্য মোট' : 'Payable Total'}:</td>
+                          <td className="px-6 py-4 text-right font-black text-xl whitespace-nowrap leading-none text-amber-300">{formatCurrency(publicSale.payableAmount || (publicSale.totalAmount - (publicSale.discount || 0)))}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+
+                  {/* Signatures */}
+                  <div className="mt-16 pt-8 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-10">
+                    <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100">
+                      <h4 className="text-xs font-black uppercase text-slate-800 mb-1 tracking-tight">📜 {lang === 'bn' ? 'ক্রয় নীতিমালা' : 'Return Policy'}</h4>
+                      <p className="text-[10px] text-slate-500 leading-relaxed italic uppercase font-medium">
+                        {lang === 'bn' 
+                          ? 'ক্রয়কৃত পণ্য ক্রয়ের ৭ দিনের মধ্যে ওয়ারেন্টি এবং পরিবর্তনের যোগ্য। পরিবর্তনের সময় অবশ্যই এই মেমো প্রদর্শন করতে হবে।'
+                          : 'Purchased hardware components are eligible for warranty within 7 days of purchase. Invoice copy must be presented.'}
+                      </p>
+                    </div>
+                    
+                    <div className="flex flex-col items-center justify-end text-center p-2">
+                      <p className="text-sm font-black text-slate-800 leading-relaxed italic">{lang === 'bn' ? 'আমাদের দোকানে কেনাকাটার জন্য আপনাকে ধন্যবাদ।' : 'Thank you for choosing A.R Enterprise!'}</p>
+                      <p className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest mt-1">
+                        {lang === 'bn' ? 'ডিজিটাল কপি • সুরক্ষিত ডেটা' : 'ORIGINAL SECURED MEMO'}
+                      </p>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

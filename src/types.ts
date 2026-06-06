@@ -61,6 +61,7 @@ export interface ShopInfo {
   address: string;
   phone: string;
   logoUrl?: string;
+  accentColor?: string;
 }
 
 export interface Customer {

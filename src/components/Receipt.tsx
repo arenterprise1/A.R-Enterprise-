@@ -17,6 +17,7 @@ interface ReceiptProps {
 export default function Receipt({ sale, shopInfo, onClose, lang }: ReceiptProps) {
   const t = translations[lang];
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
+  const accentColor = shopInfo.accentColor || '#4f46e5';
 
   useEffect(() => {
     // Generate QR code pointing to the digital invoice
@@ -102,7 +103,7 @@ export default function Receipt({ sale, shopInfo, onClose, lang }: ReceiptProps)
 
           <div className="relative z-10">
             {/* Header Section */}
-            <div className="relative mb-8 pb-6 border-b-[3px] border-black">
+            <div className="relative mb-8 pb-6 border-b-[3px]" style={{ borderColor: accentColor }}>
               <div className="flex justify-between items-start">
                 <div className="flex-1">
                   {shopInfo.logoUrl ? (
@@ -113,15 +114,15 @@ export default function Receipt({ sale, shopInfo, onClose, lang }: ReceiptProps)
                       referrerPolicy="no-referrer"
                     />
                   ) : (
-                    <div className="h-20 w-20 bg-black rounded-[28px] flex items-center justify-center text-white mb-6 shadow-xl relative overflow-hidden ring-4 ring-black/5">
-                      <div className="absolute inset-0 bg-gradient-to-tr from-blue-600/20 to-transparent opacity-60" />
+                    <div className="h-20 w-20 rounded-[28px] flex items-center justify-center text-white mb-6 shadow-xl relative overflow-hidden ring-4 ring-black/5" style={{ backgroundColor: accentColor }}>
+                      <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent opacity-60" />
                       <div className="relative z-10 flex flex-col items-center leading-none">
                         <span className="text-3xl font-black italic tracking-tighter">{shopInfo.name.charAt(0)}</span>
                         <div className="w-6 h-1 bg-white/30 rounded-full mt-1" />
                       </div>
                     </div>
                   )}
-                  <h2 className="text-4xl font-black uppercase tracking-tighter text-black leading-none mb-2">{shopInfo.name}</h2>
+                  <h2 className="text-4xl font-black uppercase tracking-tighter leading-none mb-2" style={{ color: accentColor }}>{shopInfo.name}</h2>
                   <div className="space-y-0.5">
                     <p className="text-black font-black text-xs leading-relaxed uppercase tracking-widest">{shopInfo.address}</p>
                     <div className="flex items-center">
@@ -132,7 +133,7 @@ export default function Receipt({ sale, shopInfo, onClose, lang }: ReceiptProps)
 
                 {/* Centered INVOICE label */}
                 <div className="absolute left-1/2 -translate-x-1/2 top-4">
-                  <div className="border-2 border-black bg-white text-black px-6 py-1.5 rounded-xl whitespace-nowrap">
+                  <div className="border-2 bg-white px-6 py-1.5 rounded-xl whitespace-nowrap" style={{ borderColor: accentColor, color: accentColor }}>
                     <h1 className="text-xl font-black italic uppercase tracking-[0.2em] leading-none">{t.cashMemo}</h1>
                   </div>
                 </div>
@@ -144,7 +145,7 @@ export default function Receipt({ sale, shopInfo, onClose, lang }: ReceiptProps)
                   </div>
 
                   <div className="space-y-1">
-                    <h4 className="text-[11px] font-black text-black uppercase tracking-[0.2em] italic mb-1 border-b-2 border-black w-fit ml-auto pb-0.5">{t.customerName}</h4>
+                    <h4 className="text-[11px] font-black uppercase tracking-[0.2em] italic mb-1 border-b-2 w-fit ml-auto pb-0.5" style={{ color: accentColor, borderColor: accentColor }}>{t.customerName}</h4>
                     {sale.customerName && <p className="text-lg font-black text-black leading-none uppercase">{sale.customerName}</p>}
                     <div className="flex flex-col gap-0.5 items-end">
                       {sale.customerPhone && <p className="text-[10px] font-black text-black">{t.mobile}: {sale.customerPhone}</p>}
@@ -158,58 +159,58 @@ export default function Receipt({ sale, shopInfo, onClose, lang }: ReceiptProps)
 
 
             {/* Items Table - Tali Style with Vertical Lines */}
-            <div className="mb-8 rounded-3xl border-2 border-black overflow-hidden shadow-sm">
+            <div className="mb-8 rounded-3xl border-2 overflow-hidden shadow-sm" style={{ borderColor: accentColor }}>
               <table className="w-full border-collapse">
                 <thead>
-                  <tr className="bg-white text-black border-b-[3px] border-black">
-                    <th className="px-4 py-4 text-left italic text-[14px] font-black uppercase tracking-widest border-r-2 border-black/10">#</th>
-                    <th className="px-6 py-4 text-left italic text-[14px] font-black uppercase tracking-widest border-r-2 border-black/10">{t.description}</th>
-                    <th className="px-4 py-4 text-center italic text-[14px] font-black uppercase tracking-widest border-r-2 border-black/10">{t.quantity}</th>
-                    <th className="px-6 py-4 text-right italic text-[14px] font-black uppercase tracking-widest border-r-2 border-black/10">{t.rate}</th>
+                  <tr className="bg-white border-b-[3px]" style={{ color: accentColor, borderColor: accentColor }}>
+                    <th className="px-4 py-4 text-left italic text-[14px] font-black uppercase tracking-widest border-r-2" style={{ borderColor: `${accentColor}20` }}>#</th>
+                    <th className="px-6 py-4 text-left italic text-[14px] font-black uppercase tracking-widest border-r-2" style={{ borderColor: `${accentColor}20` }}>{t.description}</th>
+                    <th className="px-4 py-4 text-center italic text-[14px] font-black uppercase tracking-widest border-r-2" style={{ borderColor: `${accentColor}20` }}>{t.quantity}</th>
+                    <th className="px-6 py-4 text-right italic text-[14px] font-black uppercase tracking-widest border-r-2" style={{ borderColor: `${accentColor}20` }}>{t.rate}</th>
                     <th className="px-6 py-4 text-right italic text-[14px] font-black uppercase tracking-widest">{t.total}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y-2 divide-black/20">
+                <tbody className="divide-y-2" style={{ borderColor: `${accentColor}20` }}>
                   {sale.items.map((item, idx) => {
                     const rate = item.total / item.quantity;
                     return (
                       <tr key={idx} className="group transition-colors">
-                        <td className="px-4 py-3 text-[12px] font-black text-black border-r-2 border-black/20">{idx + 1}</td>
-                        <td className="px-6 py-3 border-r-2 border-black/20">
+                        <td className="px-4 py-3 text-[12px] font-black text-black border-r-2" style={{ borderColor: `${accentColor}20` }}>{idx + 1}</td>
+                        <td className="px-6 py-3 border-r-2" style={{ borderColor: `${accentColor}20` }}>
                           <p className="font-black text-black text-base leading-tight uppercase">{item.productName}</p>
                           {item.warranty && (
                             <p className="text-[10px] font-black text-slate-500 mt-1 italic tracking-tight">{t.warranty}: {item.warranty}</p>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-center font-black text-black text-base border-r-2 border-black/20">{item.quantity}</td>
-                        <td className="px-6 py-3 text-right font-black text-black border-r-2 border-black/20">{formatCurrency(rate)}</td>
+                        <td className="px-4 py-3 text-center font-black text-black text-base border-r-2" style={{ borderColor: `${accentColor}20` }}>{item.quantity}</td>
+                        <td className="px-6 py-3 text-right font-black text-black border-r-2" style={{ borderColor: `${accentColor}20` }}>{formatCurrency(rate)}</td>
                         <td className="px-6 py-3 text-right font-black text-black text-base">{formatCurrency(item.total)}</td>
                       </tr>
                     );
                   })}
                 </tbody>
                 <tfoot>
-                  <tr className="bg-white text-black border-t-[3px] border-black">
-                    <td colSpan={2} className="px-6 py-4 text-right text-[12px] font-black italic uppercase tracking-widest border-r-2 border-black/20">
+                  <tr className="bg-white text-black border-t-[3px]" style={{ borderColor: accentColor }}>
+                    <td colSpan={2} className="px-6 py-4 text-right text-[12px] font-black italic uppercase tracking-widest border-r-2" style={{ borderColor: `${accentColor}20` }}>
                       {t.noOfItems}:
                     </td>
-                    <td className="px-4 py-4 text-center font-black text-lg border-r-2 border-black/20 whitespace-nowrap">
+                    <td className="px-4 py-4 text-center font-black text-lg border-r-2 whitespace-nowrap" style={{ borderColor: `${accentColor}20` }}>
                       {sale.items.length} {t.itemQuantityCount}
                     </td>
-                    <td className="px-6 py-4 text-right text-[12px] font-black italic uppercase tracking-widest border-r-2 border-black/20">{t.subTotal}:</td>
+                    <td className="px-6 py-4 text-right text-[12px] font-black italic uppercase tracking-widest border-r-2" style={{ borderColor: `${accentColor}20` }}>{t.subTotal}:</td>
                     <td className="px-6 py-4 text-right font-black text-xl whitespace-nowrap">
                       {formatCurrency(sale.totalAmount)}
                     </td>
                   </tr>
                   {(sale.discount || 0) > 0 && (
                     <tr className="bg-white text-black">
-                      <td colSpan={4} className="px-6 py-3 text-right text-[12px] font-black italic uppercase tracking-widest border-r-2 border-black/20">{t.discount}:</td>
+                      <td colSpan={4} className="px-6 py-3 text-right text-[12px] font-black italic uppercase tracking-widest border-r-2" style={{ borderColor: `${accentColor}20` }}>{t.discount}:</td>
                       <td className="px-6 py-3 text-right font-black text-xl whitespace-nowrap text-red-500">
                         - {formatCurrency(sale.discount || 0)}
                       </td>
                     </tr>
                   )}
-                  <tr className="bg-black text-white">
+                  <tr className="text-white" style={{ backgroundColor: accentColor }}>
                     <td colSpan={4} className="px-6 py-4 text-right text-[14px] font-black italic uppercase tracking-widest border-r-2 border-white/20">{t.payable}:</td>
                     <td className="px-6 py-4 text-right font-black text-2xl whitespace-nowrap">
                       {formatCurrency(sale.payableAmount || (sale.totalAmount - (sale.discount || 0)))}
@@ -224,7 +225,7 @@ export default function Receipt({ sale, shopInfo, onClose, lang }: ReceiptProps)
             {/* Footer & Signature Section */}
             <div className="mt-20 pt-8 grid grid-cols-2 gap-20">
               <div className="text-center">
-                <div className="border-t-2 border-black/20 pt-3">
+                <div className="border-t-2 pt-3" style={{ borderColor: `${accentColor}30` }}>
                   <p className="text-xs font-black text-black uppercase tracking-widest italic">{t.customerSignature}</p>
                 </div>
               </div>
@@ -236,7 +237,7 @@ export default function Receipt({ sale, shopInfo, onClose, lang }: ReceiptProps)
                   {/* Decorative underline for signature */}
                   <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-24 h-[1px] bg-blue-900/40 rotate-[-1deg]" />
                 </div>
-                <div className="border-t-[3px] border-black pt-3 w-full">
+                <div className="border-t-[3px] pt-3 w-full" style={{ borderColor: accentColor }}>
                   <p className="text-xs font-black text-black uppercase tracking-widest italic">{t.authoritySignature}</p>
                 </div>
               </div>
