@@ -3,9 +3,10 @@ import { Sale, ShopInfo } from '../types';
 import { formatCurrency } from '../lib/utils';
 import { format } from 'date-fns';
 import { bn, enUS } from 'date-fns/locale';
-import { Printer, X } from 'lucide-react';
+import { Printer, X, CheckCircle2 } from 'lucide-react';
 import { Language, translations } from '../translations';
 import QRCode from 'qrcode';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface ReceiptProps {
   sale: Sale;
@@ -18,6 +19,21 @@ export default function Receipt({ sale, shopInfo, onClose, lang }: ReceiptProps)
   const t = translations[lang];
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
   const accentColor = shopInfo.accentColor || '#4f46e5';
+
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
+    setToast({ message, type });
+  };
+
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => {
+        setToast(null);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
 
   useEffect(() => {
     // Generate QR code pointing to the digital invoice
@@ -43,17 +59,25 @@ export default function Receipt({ sale, shopInfo, onClose, lang }: ReceiptProps)
   useEffect(() => {
     // Auto-trigger print when receipt is shown
     const timer = setTimeout(() => {
-      handlePrint();
+      handlePrint(true);
     }, 500); // Small delay to let fonts/styles load
     return () => clearTimeout(timer);
   }, [sale.id]);
 
-  const handlePrint = () => {
+  const handlePrint = (isAutoTrigger = false) => {
     try {
       const originalTitle = document.title;
       document.title = `${shopInfo.name} - Invoice`;
       window.print();
       document.title = originalTitle;
+      
+      if (!isAutoTrigger) {
+        showToast(
+          lang === 'bn' 
+            ? 'মেমো প্রিন্ট করার নির্দেশ পাঠানো হয়েছে! 🖨️' 
+            : 'Print command initiated successfully! 🖨️'
+        );
+      }
     } catch (e) {
       console.error("Print failed", e);
     }
@@ -70,7 +94,7 @@ export default function Receipt({ sale, shopInfo, onClose, lang }: ReceiptProps)
           </div>
           <div className="flex gap-2">
             <button 
-              onClick={handlePrint}
+              onClick={() => handlePrint(false)}
               className="px-6 py-2.5 bg-black text-white rounded-2xl hover:scale-105 transition-all flex items-center gap-2 font-black text-sm italic tracking-wide"
             >
               <Printer size={16} /> {t.print}
@@ -276,6 +300,29 @@ export default function Receipt({ sale, shopInfo, onClose, lang }: ReceiptProps)
             </div>
           </div>
         </div>
+
+        <AnimatePresence>
+          {toast && (
+            <motion.div
+              initial={{ opacity: 0, y: 50, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+              className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-3 px-5 py-3.5 bg-slate-900 border border-slate-800 text-white rounded-2xl shadow-xl max-w-sm w-max print:hidden"
+            >
+              <div className="w-5 h-5 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400 shrink-0">
+                <CheckCircle2 size={13} />
+              </div>
+              <p className="text-xs font-bold leading-tight tracking-wide">{toast.message}</p>
+              <button 
+                onClick={() => setToast(null)}
+                className="ml-2 text-slate-400 hover:text-white transition-colors"
+              >
+                <X size={14} />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

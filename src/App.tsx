@@ -40,6 +40,7 @@ import { CheckCircle2, Share2, PhoneCall, MapPin, Calendar, DollarSign, FileText
 import { format } from 'date-fns';
 import { bn, enUS } from 'date-fns/locale';
 import { toPng } from 'html-to-image';
+import { motion, AnimatePresence } from 'motion/react';
 
 const DEFAULT_SHOP_INFO: ShopInfo = {
   name: 'এ.আর এন্টারপ্রাইজ',
@@ -67,6 +68,21 @@ export default function App() {
   const [publicLoading, setPublicLoading] = useState<boolean>(false);
   const [publicError, setPublicError] = useState<string>('');
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
+
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
+    setToast({ message, type });
+  };
+
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => {
+        setToast(null);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
 
   // Custom states for generating and viewing public receipt PNG images natively
   const [publicInvoicePng, setPublicInvoicePng] = useState<string>('');
@@ -448,6 +464,11 @@ export default function App() {
         navigator.clipboard.writeText(window.location.href);
         setCopiedLink(true);
         setTimeout(() => setCopiedLink(false), 2000);
+        showToast(
+          lang === 'bn' 
+            ? 'ইনভয়েস লিংকটি সফলভাবে কপি করা হয়েছে! 📋' 
+            : 'Invoice link copied to clipboard! 📋'
+        );
       } catch (err) {
         console.error('Failed to copy link', err);
       }
@@ -455,6 +476,11 @@ export default function App() {
 
     const handlePrintInvoice = () => {
       window.print();
+      showToast(
+        lang === 'bn' 
+          ? 'মেমো প্রিন্ট করার নির্দেশ পাঠানো হয়েছে! 🖨️' 
+          : 'Print command initiated successfully! 🖨️'
+      );
     };
 
     const handleDownloadPng = () => {
@@ -462,6 +488,11 @@ export default function App() {
       link.download = `Invoice-${publicSale.id.slice(0, 8).toUpperCase()}.png`;
       link.href = publicInvoicePng;
       link.click();
+      showToast(
+        lang === 'bn' 
+          ? 'মেমো পিকচার সফলভাবে ডাউনলোড হয়েছে! 📥' 
+          : 'Invoice image downloaded successfully! 📥'
+      );
     };
 
     return (
@@ -889,6 +920,29 @@ export default function App() {
             </div>
           </div>
         )}
+
+        <AnimatePresence>
+          {toast && (
+            <motion.div
+              initial={{ opacity: 0, y: 50, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+              className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-3 px-5 py-3.5 bg-slate-900 border border-slate-800 text-white rounded-2xl shadow-xl max-w-sm w-max print:hidden"
+            >
+              <div className="w-5 h-5 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400 shrink-0">
+                <CheckCircle2 size={13} />
+              </div>
+              <p className="text-xs font-bold leading-tight tracking-wide">{toast.message}</p>
+              <button 
+                onClick={() => setToast(null)}
+                className="ml-2 text-slate-400 hover:text-white transition-colors"
+              >
+                <X size={14} />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     );
   }
