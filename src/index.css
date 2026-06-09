@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Dancing+Script:wght@400;700&family=Space+Grotesk:wght@300..700&family=Great+Vibes&family=Mrs+Saint+Delafield&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Dancing+Script:wght@400;700&family=Space+Grotesk:wght@300..700&family=Great+Vibes&family=Mrs+Saint+Delafield&family=Hind+Siliguri:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
 @layer base {
@@ -8,7 +8,7 @@
   }
 
   body {
-    @apply antialiased text-slate-900 bg-slate-50 selection:bg-indigo-600 selection:text-white;
+    @apply antialiased text-slate-900 bg-slate-50 selection:bg-indigo-600 selection:text-white transition-colors duration-350;
   }
 
   @media print {
@@ -79,6 +79,50 @@
       color: #fff !important;
     }
   }
+
+  /* Global variables for theme injection */
+  :root {
+    --theme-bg: #f8fafc;
+    --theme-sidebar: #ffffff;
+    --theme-card: #ffffff;
+    --theme-panel: #f1f5f9;
+    --theme-border: #e2e8f0;
+    --theme-text: #1e293b;
+    --theme-text-muted: #64748b;
+    --theme-hover: #f1f5f9;
+    --theme-input-bg: #ffffff;
+    --theme-header: rgba(255, 255, 255, 0.85);
+  }
+
+  /* Premium Midnight Blue Professional Theme */
+  .app-theme-dark {
+    --theme-bg: #0b111e;
+    --theme-sidebar: #111a2e;
+    --theme-card: #17243c;
+    --theme-panel: #0d1627;
+    --theme-border: #233454;
+    --theme-text: #f1f5f9;
+    --theme-text-muted: #94a3b8;
+    --theme-hover: #1f304f;
+    --theme-input-bg: #111a2e;
+    --theme-header: rgba(17, 26, 46, 0.85);
+    color-scheme: dark;
+  }
+
+  /* Premium Minimalist Black Tech Theme */
+  .app-theme-black {
+    --theme-bg: #000000;
+    --theme-sidebar: #09090b;
+    --theme-card: #151518;
+    --theme-panel: #000000;
+    --theme-border: #26262b;
+    --theme-text: #f4f4f5;
+    --theme-text-muted: #a1a1aa;
+    --theme-hover: #222226;
+    --theme-input-bg: #09090b;
+    --theme-header: rgba(9, 9, 11, 0.85);
+    color-scheme: dark;
+  }
 }
 
 @layer components {
@@ -126,4 +170,141 @@
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 0, 0, 0.2);
+}
+
+/* =========================================
+   APP-WIDE DYNAMIC THEME SELECTOR INTERCEPTORS
+   ========================================= */
+
+/* Dark/Black overall rules */
+.app-theme-dark, .app-theme-black {
+  /* Panels and Container background */
+  &, &.bg-slate-50, .bg-slate-50, .bg-slate-[50\/50] {
+    background-color: var(--theme-bg) !important;
+  }
+
+  /* Main frame background overlays */
+  .bg-white, .pro-card, .bg-white\/80 {
+    background-color: var(--theme-card) !important;
+  }
+
+  /* Header styles */
+  header, .header {
+    background-color: var(--theme-header) !important;
+    border-color: var(--theme-border) !important;
+    backdrop-filter: blur(12px);
+  }
+
+  /* Sidebars */
+  aside, .aside {
+    background-color: var(--theme-sidebar) !important;
+    border-color: var(--theme-border) !important;
+  }
+
+  /* Table rules */
+  table, thead, tbody, th, td, tr {
+    border-color: var(--theme-border) !important;
+  }
+  thead tr, tr.bg-slate-50 {
+    background-color: var(--theme-panel) !important;
+  }
+  tbody tr:hover, .hover\:bg-slate-50\/80:hover {
+    background-color: var(--theme-hover) !important;
+  }
+  .divide-slate-100 > :not([hidden]) ~ :not([hidden]), .divide-y {
+    border-color: var(--theme-border) !important;
+  }
+
+  /* Borders globally */
+  .border-slate-100, .border-slate-200, .border-slate-300, .border-slate-250, .border-gray-200, .border-zinc-200 {
+    border-color: var(--theme-border) !important;
+  }
+
+  /* Text elements to high contrast */
+  .text-slate-900, .text-slate-800, .text-slate-700, .text-gray-900, .text-zinc-900 {
+    color: var(--theme-text) !important;
+  }
+
+  /* Text elements to medium/muted */
+  .text-slate-600, .text-slate-500, .text-slate-400, .text-gray-600, .text-gray-500, .text-gray-400 {
+    color: var(--theme-text-muted) !important;
+  }
+
+  /* Nav Links Overrides */
+  .nav-link-inactive {
+    color: var(--theme-text-muted) !important;
+  }
+  .nav-link-inactive:hover {
+    background-color: var(--theme-hover) !important;
+    color: var(--theme-text) !important;
+  }
+  .nav-link-active {
+    background-color: rgba(99, 102, 241, 0.15) !important;
+    color: #a5b4fc !important;
+    border-color: rgba(99, 102, 241, 0.3) !important;
+  }
+
+  /* Form Inputs and selects */
+  input, select, textarea, .pro-input {
+    background-color: var(--theme-input-bg) !important;
+    border-color: var(--theme-border) !important;
+    color: var(--theme-text) !important;
+  }
+  input::placeholder, textarea::placeholder {
+    color: var(--theme-text-muted) !important;
+    opacity: 0.6;
+  }
+
+  /* Helper badging / buttons hover effects */
+  .bg-indigo-50 {
+    background-color: rgba(99, 102, 241, 0.15) !important;
+    color: #a5b4fc !important;
+  }
+  .bg-amber-50 {
+    background-color: rgba(245, 158, 11, 0.15) !important;
+    color: #fcd34d !important;
+  }
+  .bg-red-50 {
+    background-color: rgba(239, 68, 68, 0.15) !important;
+    color: #fca5a5 !important;
+  }
+  .bg-emerald-50 {
+    background-color: rgba(16, 185, 129, 0.15) !important;
+    color: #6ee7b7 !important;
+  }
+
+  /* Accent items and badges */
+  .text-indigo-600 { color: #818cf8 !important; }
+  .text-amber-600 { color: #fbbf24 !important; }
+  .text-red-600 { color: #f87171 !important; }
+  .text-emerald-600 { color: #34d399 !important; }
+
+  /* Buttons / badges bg */
+  .pro-btn-secondary, button.bg-white, div.bg-white, a.bg-white {
+    background-color: var(--theme-card) !important;
+    border-color: var(--theme-border) !important;
+    color: var(--theme-text) !important;
+  }
+  .pro-btn-secondary:hover, button.bg-white:hover {
+    background-color: var(--theme-hover) !important;
+  }
+
+  /* Receipt backgrounds / watermark overlays */
+  .absolute.opacity-\[0\.035\] {
+    opacity: 0.08 !important;
+    filter: invert(1) brightness(0.7);
+  }
+
+  /* Modal content and backdrops */
+  .bg-slate-955\/60 {
+    background-color: rgba(0, 0, 0, 0.7) !important;
+  }
+
+  /* Custom scrollbars */
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1) !important;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2) !important;
+  }
 }

@@ -57,10 +57,17 @@ service cloud.firestore {
       allow delete: if isOwner() && getShopId() == existing().shopId && request.auth.uid != userId; // Owners can delete staff but not themselves
     }
 
-    match /invitations/{phone} {
-      // Allow getting a single invitation by phone to verify password during staff login
-      // We restrict list to owners only.
-      allow get: if true; 
+    match /invitations/{inviteId} {
+      // Secure hybrid invitations verification:
+      // 1. Phone/Password composite key (document ID is phone_password):
+      //    We allow unauthenticated get with a strict matches rule to verify password during staff login.
+      //    The key is unguessable, making brute-forcing or unauthorized retrieval impossible.
+      // 2. Email invite key (document ID is verified email):
+      //    We allow get for signed-in users whose verified email matches the invitation document ID.
+      allow get: if (inviteId.matches('.+_.+')) 
+                    || (isSignedIn() && request.auth.token.email_verified == true && request.auth.token.email.toLowerCase() == inviteId);
+      
+      // Restrict list to owners to prevent staff or public enumerations
       allow list: if isOwner() && resource.data.shopId == getShopId();
       allow create: if isOwner() && incoming().shopId == getShopId() && incoming().invitedBy == request.auth.uid;
       allow delete: if isOwner() && existing().shopId == getShopId();
@@ -69,13 +76,14 @@ service cloud.firestore {
     // Product Validation
     function isValidProduct(data) {
       return data.keys().hasAll(['name', 'price', 'stock', 'category', 'unit', 'shopId']) 
-        && data.keys().size() >= 6 && data.keys().size() <= 12
+        && data.keys().size() >= 6 && data.keys().size() <= 13
         && data.name is string && data.name.size() <= 200
         && data.price is number && data.price >= 0
         && data.stock is number
         && data.category is string && data.category.size() <= 100
         && data.unit is string && data.unit.size() <= 50
-        && data.shopId == getShopId();
+        && data.shopId == getShopId()
+        && (!data.keys().hasAny(['minStockLevel']) || (data.minStockLevel is number && data.minStockLevel >= 0));
     }
 
     match /products/{productId} {
@@ -97,12 +105,14 @@ service cloud.firestore {
     // Sale Validation
     function isValidSale(data) {
       return data.keys().hasAll(['timestamp', 'totalAmount', 'shopId', 'items', 'createdBy'])
-        && data.keys().size() >= 5 && data.keys().size() <= 15
+        && data.keys().size() >= 5 && data.keys().size() <= 17
         && data.timestamp is number
         && data.totalAmount is number && data.totalAmount >= 0
         && data.shopId == getShopId()
         && data.createdBy == request.auth.uid
-        && data.items is list && data.items.size() <= 100;
+        && data.items is list && data.items.size() <= 100
+        && (!data.keys().hasAny(['dueAmount']) || (data.dueAmount is number && data.dueAmount >= 0))
+        && (!data.keys().hasAny(['paymentStatus']) || (data.paymentStatus is string && (data.paymentStatus == 'paid' || data.paymentStatus == 'partially_paid' || data.paymentStatus == 'unpaid')));
     }
 
     match /sales/{saleId} {

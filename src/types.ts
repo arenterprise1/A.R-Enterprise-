@@ -23,6 +23,7 @@ export interface Product {
   price: number;
   purchasePrice: number;
   stock: number;
+  minStockLevel?: number; // Minimum stock level for Low Stock Alerts
   barcode?: string;
   category: string;
   brand?: string;
@@ -49,6 +50,8 @@ export interface Sale {
   totalAmount: number;
   discount: number;
   payableAmount: number;
+  dueAmount?: number; // Outstanding amount (বাকি) for credit sales
+  paymentStatus?: 'paid' | 'partially_paid' | 'unpaid'; // Status (পরিশোধিত, আংশিক, অপরিশোধিত)
   customerName?: string;
   customerPhone?: string;
   customerAddress?: string;
@@ -70,6 +73,7 @@ export interface Customer {
   phone: string;
   address: string;
   totalSales: number;
+  totalDue?: number; // Total outstanding balance across all transactions (বাকি খাতা)
   lastPurchaseDate?: number;
   shopId: string;
 }

@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { db, auth, handleFirestoreError, OperationType } from './lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import { 
   collection, 
   onSnapshot, 
@@ -96,7 +97,15 @@ export default function App() {
   const [showImageModal, setShowImageModal] = useState<boolean>(false);
   const memoRef = useRef<HTMLDivElement>(null);
 
-  const user = auth.currentUser;
+  const [user, setUser] = useState<any>(auth.currentUser);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+    });
+    return () => unsub();
+  }, []);
+
   const t = translations[lang];
 
   // Load public invoice if query params are present in the URL
@@ -257,6 +266,37 @@ export default function App() {
       setCustomers(cData);
     });
   }, [userProfile?.shopId]);
+
+  // Listen to add-to-inventory-direct custom event
+  useEffect(() => {
+    if (!userProfile) return;
+    const handleAddInventoryDirect = async (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (!detail || !detail.productName) return;
+      const matchedProduct = products.find(p => 
+        p.name.toLowerCase().includes(detail.productName.toLowerCase())
+      );
+      if (matchedProduct) {
+        await handleUpdateProduct({
+          ...matchedProduct,
+          stock: matchedProduct.stock + (detail.quantity || 1)
+        });
+      } else {
+        await handleAddProduct({
+          name: detail.productName,
+          price: 150,
+          purchasePrice: 100,
+          stock: detail.quantity || 1,
+          minStockLevel: 5,
+          category: 'General',
+          unit: 'pcs',
+          warranty: 'No warranty'
+        });
+      }
+    };
+    window.addEventListener('add-to-inventory-direct', handleAddInventoryDirect);
+    return () => window.removeEventListener('add-to-inventory-direct', handleAddInventoryDirect);
+  }, [products, userProfile]);
 
   const handleAddProduct = async (newProduct: Omit<Product, 'id' | 'shopId'>) => {
     if (!userProfile) return;
@@ -440,21 +480,6 @@ export default function App() {
       );
     }
 
-    if (isGeneratingPublicPng) {
-      return (
-        <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 gap-4 px-6 text-center">
-          <Loader2 className="animate-spin text-amber-500" size={44} />
-          <h3 className="text-lg font-black tracking-tight text-slate-200">
-            {lang === 'bn' ? 'মেমোটির ইমেজ (PNG) প্রস্তুত হচ্ছে...' : 'Preparing Invoice Image (PNG)...'}
-          </h3>
-          <p className="text-xs text-slate-400 max-w-xs leading-relaxed">
-            {lang === 'bn' 
-              ? 'আপনার মোবাইলে মেমোটির ছবি ডাউনলোড বা সেভ করার উপযোগী হাই-রেজোলিউশন সংস্করণ তৈরি করা হচ্ছে।' 
-              : 'Generating a high-resolution, mobile-friendly image version for direct offline storage and printing.'}
-          </p>
-        </div>
-      );
-    }
 
     const currentShop = publicShop || shopInfo || DEFAULT_SHOP_INFO;
     const accentColor = currentShop.accentColor || '#4f46e5';
@@ -483,10 +508,27 @@ export default function App() {
       );
     };
 
-    const handleDownloadPng = () => {
+    const handleDownloadPng = async () => {
+      let pngUrl = publicInvoicePng;
+      if (!pngUrl && publicMemoRef.current) {
+        try {
+          pngUrl = await toPng(publicMemoRef.current, {
+            quality: 1.0,
+            pixelRatio: 2,
+            backgroundColor: '#ffffff',
+          });
+          setPublicInvoicePng(pngUrl);
+        } catch (err) {
+          console.error("Failed to generate PNG on download trigger:", err);
+        }
+      }
+      if (!pngUrl) {
+        alert(lang === 'bn' ? 'দুঃখিত, ইমেজ সংস্করণ প্রস্তুত হচ্ছে। অনুগ্রহ করে ২ সেকেন্ড পর আবার চেষ্টা করুন।' : 'Sorry, the image version is still preparing. Please try again in 2 seconds.');
+        return;
+      }
       const link = document.createElement('a');
       link.download = `Invoice-${publicSale.id.slice(0, 8).toUpperCase()}.png`;
-      link.href = publicInvoicePng;
+      link.href = pngUrl;
       link.click();
       showToast(
         lang === 'bn' 
@@ -502,7 +544,7 @@ export default function App() {
         <div className="absolute top-0 left-[-9999px] select-none pointer-events-none" style={{ width: '640px' }}>
           <div ref={publicMemoRef} className="bg-white p-8 font-sans text-sm relative" style={{ width: '640px' }}>
             {/* Watermark Logo */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.03] z-0">
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.10] z-0">
               <img 
                 src={currentShop.logoUrl || AR_LOGO_BASE64} 
                 alt="Watermark Logo" 
@@ -682,13 +724,23 @@ export default function App() {
               </p>
 
               {/* Crisp PNG Viewer */}
-              <div className="w-full bg-white rounded-2xl overflow-hidden shadow-2xl ring-4 ring-black/40 relative max-h-[60vh] overflow-y-auto">
-                <img 
-                  src={publicInvoicePng} 
-                  alt={`${currentShop.name} Invoice PNG`} 
-                  className="w-full h-auto object-contain cursor-zoom-in"
-                  referrerPolicy="no-referrer"
-                />
+              <div className="w-full bg-white rounded-2xl overflow-hidden shadow-2xl ring-4 ring-black/40 relative max-h-[60vh] overflow-y-auto min-h-[300px] flex items-center justify-center">
+                {publicInvoicePng ? (
+                  <img 
+                    src={publicInvoicePng} 
+                    alt={`${currentShop.name} Invoice PNG`} 
+                    className="w-full h-auto object-contain cursor-zoom-in animate-fadeIn"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center gap-3 p-8 text-center text-slate-800">
+                    <Loader2 className="animate-spin text-[#9b59b6]" size={36} />
+                    <p className="text-sm font-black animate-pulse leading-snug">
+                      {lang === 'bn' ? 'সরাসরি ক্যাশ মেমো ছবি প্রস্তুত হচ্ছে...' : 'Generating direct crisp cash memo...'}
+                    </p>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-none">A.R Enterprise Engine</p>
+                  </div>
+                )}
               </div>
 
               {/* Action Buttons */}
@@ -717,31 +769,38 @@ export default function App() {
           <div className="max-w-2xl mx-auto space-y-4">
             
             {/* Nav containing switches/actions */}
-            <div className="flex items-center justify-between px-2 print:hidden">
+            <div className="flex items-center justify-between px-2 print:hidden" id="verified-memo-nav">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 bg-slate-900 rounded-xl border border-slate-800 flex items-center justify-center overflow-hidden">
-                  <img src={AR_LOGO_BASE64} alt="A.R Logo" className="w-6 h-6 object-contain" />
+                  <img src={currentShop.logoUrl || AR_LOGO_BASE64} alt="Shop Logo" className="w-6 h-6 object-contain" referrerPolicy="no-referrer" />
                 </div>
-                <span className="font-extrabold text-xs text-slate-300 tracking-tight">{lang === 'bn' ? 'এ.আর এন্টারপ্রাইজ' : 'A.R Enterprise'}</span>
+                <span className="font-extrabold text-xs text-slate-300 tracking-tight">{currentShop.name}</span>
               </div>
               
               <div className="flex items-center gap-1.5">
                 <button 
+                  onClick={handleDownloadPng}
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-750 text-white rounded-xl text-xs font-black flex items-center gap-1 shadow-md cursor-pointer"
+                >
+                  <Download size={14} />
+                  {lang === 'bn' ? 'ডাউনলোড' : 'Download PNG'}
+                </button>
+                <button 
                   onClick={() => setViewMode('png')}
-                  className="px-3 py-1.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 text-xs font-black flex items-center gap-1 shadow-md"
+                  className="px-3 py-1.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 text-xs font-black flex items-center gap-1 shadow-md cursor-pointer"
                 >
                   <Image size={14} />
-                  {lang === 'bn' ? 'ছবি ও ডাউনলোড (PNG)' : 'Image Mode'}
+                  {lang === 'bn' ? 'ছবি মোড' : 'Image Mode'}
                 </button>
                 <button 
                   onClick={() => setLang(lang === 'bn' ? 'en' : 'bn')}
-                  className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-[10px] font-bold text-slate-200 rounded-xl transition-all shadow-sm"
+                  className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-[10px] font-bold text-slate-200 rounded-xl transition-all shadow-sm cursor-pointer"
                 >
                   {lang === 'bn' ? 'English' : 'বাংলা'}
                 </button>
                 <button 
                   onClick={handleCopyLink}
-                  className={`px-3 py-1.5 rounded-xl border font-bold text-xs flex items-center gap-1.5 transition-all active:scale-95 shadow-sm ${
+                  className={`px-3 py-1.5 rounded-xl border font-bold text-xs flex items-center gap-1.5 transition-all active:scale-95 shadow-sm cursor-pointer ${
                     copiedLink 
                       ? 'bg-emerald-900/40 text-emerald-300 border-emerald-800' 
                       : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
@@ -752,7 +811,7 @@ export default function App() {
                 </button>
                 <button 
                   onClick={handlePrintInvoice}
-                  className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl active:scale-95 transition-all font-bold text-xs flex items-center gap-1.5 shadow-sm border border-slate-700"
+                  className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl active:scale-95 transition-all font-bold text-xs flex items-center gap-1.5 shadow-sm border border-slate-700 cursor-pointer"
                 >
                   <Printer size={13} />
                   {lang === 'bn' ? 'প্রিন্ট' : 'Print'}
@@ -776,9 +835,9 @@ export default function App() {
               </div>
 
               <div className="p-8 md:p-12 relative overflow-hidden">
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.03] print:opacity-[0.06] z-0">
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.10] print:opacity-[0.12] z-0">
                   <img 
-                    src={AR_LOGO_BASE64} 
+                    src={currentShop.logoUrl || AR_LOGO_BASE64} 
                     alt="Watermark Logo" 
                     className="w-4/5 h-auto object-contain grayscale"
                   />
@@ -789,7 +848,7 @@ export default function App() {
                   <div className="relative mb-8 pb-6 border-b-2 border-slate-900/10 flex flex-col sm:flex-row justify-between items-start gap-6">
                     <div>
                       <div className="w-16 h-16 bg-slate-50 rounded-[20px] flex items-center justify-center p-1.5 border border-slate-100 shadow-md ring-4 ring-slate-100/50 mb-4 overflow-hidden">
-                        <img src={AR_LOGO_BASE64} alt="Logo" className="w-full h-full object-contain" />
+                        <img src={currentShop.logoUrl || AR_LOGO_BASE64} alt="Logo" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
                       </div>
                       <h1 className="text-3xl md:text-4xl font-black tracking-tighter uppercase text-slate-900 leading-none mb-1.5">{currentShop.name}</h1>
                       <p className="text-slate-500 text-xs font-bold uppercase tracking-wider leading-relaxed pr-6">{currentShop.address}</p>
@@ -963,6 +1022,8 @@ export default function App() {
         userProfile={userProfile}
         lang={lang}
         onLanguageChange={setLang}
+        shopInfo={shopInfo}
+        onUpdateShopInfo={handleUpdateShopInfo}
       >
         {activeView === 'dashboard' && <Dashboard products={products} sales={sales} lang={lang} />}
         {activeView === 'pos' && (

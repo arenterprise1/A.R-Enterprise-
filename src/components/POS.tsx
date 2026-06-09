@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, ShoppingBag, Trash2, ChevronRight, CheckCircle2, User, Phone, MapPin, Package, Camera, X } from 'lucide-react';
+import { Search, ShoppingBag, Trash2, ChevronRight, CheckCircle2, User, Phone, MapPin, Package, Camera, X, LayoutGrid, List, Palette } from 'lucide-react';
 import { Product, SaleItem, Customer, Sale, ShopInfo } from '../types';
 import { formatCurrency, cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -18,6 +18,35 @@ interface POSProps {
 export default function POS({ products, customers, shopInfo, onCompleteSale, lang }: POSProps) {
   const t = translations[lang];
   const [searchQuery, setSearchQuery] = useState('');
+  
+  const [posLayout, setPosLayout] = useState<'grid' | 'list'>(() => {
+    try {
+      return (localStorage.getItem('pos_layout') as 'grid' | 'list') || 'list';
+    } catch {
+      return 'list';
+    }
+  });
+
+  const [posTheme, setPosTheme] = useState<'white' | 'dark'>(() => {
+    try {
+      const saved = localStorage.getItem('pos_theme');
+      return saved === 'white' ? 'white' : 'dark';
+    } catch {
+      return 'dark';
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('pos_layout', posLayout);
+    } catch (e) {}
+  }, [posLayout]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('pos_theme', posTheme);
+    } catch (e) {}
+  }, [posTheme]);
   const [isScanning, setIsScanning] = useState(false);
   const [scannerError, setScannerError] = useState<string | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
@@ -90,6 +119,41 @@ export default function POS({ products, customers, shopInfo, onCompleteSale, lan
   };
 
   const isScanningRef = useRef(false);
+
+  useEffect(() => {
+    const handleAddDirect = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (!detail || !detail.productName) return;
+      const matchedProduct = products.find(p => 
+        p.name.toLowerCase().includes(detail.productName.toLowerCase())
+      );
+      if (matchedProduct) {
+        const quantityToAdd = detail.quantity || 1;
+        setCart(prev => {
+          const existing = prev.find(item => item.productId === matchedProduct.id);
+          if (existing) {
+            const newQty = Math.min(matchedProduct.stock, existing.quantity + quantityToAdd);
+            return prev.map(item => 
+              item.productId === matchedProduct.id 
+                ? { ...item, quantity: newQty, total: newQty * item.price }
+                : item
+            );
+          }
+          return [...prev, {
+            id: Math.random().toString(36).substr(2, 9),
+            productId: matchedProduct.id,
+            productName: matchedProduct.name,
+            price: matchedProduct.price,
+            quantity: Math.min(matchedProduct.stock, quantityToAdd),
+            total: matchedProduct.price * Math.min(matchedProduct.stock, quantityToAdd),
+            warranty: matchedProduct.warranty
+          }];
+        });
+      }
+    };
+    window.addEventListener('add-to-cart-direct', handleAddDirect);
+    return () => window.removeEventListener('add-to-cart-direct', handleAddDirect);
+  }, [products]);
 
   useEffect(() => {
     if (isScanning) {
@@ -174,6 +238,48 @@ export default function POS({ products, customers, shopInfo, onCompleteSale, lan
     }
   };
 
+  const labelText = {
+    bn: {
+      layout: 'লেআউট:',
+      theme: 'ব্যাকগ্রাউন্ড:',
+      list: 'রেকট্যাঙ্গেল (লিস্ট)',
+      grid: 'বক্স (গ্রিড)',
+      white: 'সাদা',
+      dark: 'ডার্ক'
+    },
+    en: {
+      layout: 'Layout:',
+      theme: 'Background:',
+      list: 'Rectangle (List)',
+      grid: 'Box (Grid)',
+      white: 'White',
+      dark: 'Dark'
+    }
+  }[lang];
+
+  const theme = {
+    white: {
+      searchBg: "bg-white border-slate-200 text-slate-900 focus:ring-indigo-500 focus:border-indigo-500",
+      card: "bg-white border border-slate-200/80 text-slate-900 hover:border-slate-300 hover:bg-slate-50/50 shadow-sm",
+      cardText: "text-slate-900",
+      cardSec: "text-slate-500",
+      categoryBadge: "bg-slate-100 text-slate-800 border border-slate-200/50",
+      stock: "bg-indigo-50/80 text-indigo-600 border border-indigo-100",
+      price: "text-slate-900",
+      panel: "bg-slate-100/50"
+    },
+    dark: {
+      searchBg: "bg-[#1e293b]/90 border-slate-700/80 text-slate-100 focus:ring-indigo-400 focus:border-indigo-400 placeholder-slate-400/70",
+      card: "bg-[#1e293b] border border-slate-800/80 text-slate-150 hover:bg-[#334155]/60 hover:border-indigo-500/40 shadow-md",
+      cardText: "text-slate-100",
+      cardSec: "text-slate-400",
+      categoryBadge: "bg-slate-800/60 text-indigo-300 border border-indigo-500/10",
+      stock: "bg-indigo-950/40 text-indigo-300 border border-indigo-550/10",
+      price: "text-indigo-400",
+      panel: "bg-[#0f172a]"
+    }
+  }[posTheme];
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-full lg:h-[calc(100vh-14rem)] overflow-y-auto lg:overflow-hidden pb-20 lg:pb-0">
       {/* Receipt Modal */}
@@ -187,8 +293,16 @@ export default function POS({ products, customers, shopInfo, onCompleteSale, lan
       )}
       
       {/* Product Selection */}
-      <div className="lg:col-span-7 xl:col-span-8 flex flex-col space-y-6 lg:overflow-hidden min-h-[400px]">
-        <div className="flex gap-4 sticky top-0 z-10 bg-slate-50/50 pb-2">
+      <div className={cn(
+        "lg:col-span-7 xl:col-span-8 flex flex-col space-y-5 lg:overflow-hidden min-h-[400px] p-4 sm:p-5 rounded-[32px] transition-all duration-300",
+        posTheme === 'white' && "bg-[#F8FAFC]/50 border border-slate-200/50",
+        posTheme === 'dark' && "bg-[#0f172a] border border-slate-800/80 shadow-inner"
+      )}>
+        <div className={cn(
+          "flex gap-4 sticky top-0 z-10 pb-2 transition-all duration-300",
+          posTheme === 'white' && "bg-[#F8FAFC]/20 backdrop-blur-md",
+          posTheme === 'dark' && "bg-[#0f172a]/90 backdrop-blur-md"
+        )}>
           <div className="relative flex-1">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
             <input
@@ -196,7 +310,7 @@ export default function POS({ products, customers, shopInfo, onCompleteSale, lan
               placeholder={t.searchProducts}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pro-input pl-12 text-lg shadow-sm focus:ring-2 focus:ring-indigo-500"
+              className={cn("pro-input pl-12 text-lg shadow-sm border focus:ring-2 transition-all", theme.searchBg)}
             />
           </div>
           <button 
@@ -208,6 +322,87 @@ export default function POS({ products, customers, shopInfo, onCompleteSale, lan
           >
             {isScanning ? <X size={24} /> : <Camera size={24} />}
           </button>
+        </div>
+
+        {/* Layout & Background Options Bar */}
+        <div className={cn(
+          "flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-2xl border transition-all duration-300",
+          posTheme === 'white' && "bg-white border-slate-200/85 shadow-sm",
+          posTheme === 'dark' && "bg-slate-800/35 border-slate-800/60"
+        )}>
+          {/* Layout Toggle */}
+          <div className="flex items-center gap-2">
+            <span className={cn("text-[10px] font-black uppercase tracking-widest", theme.cardSec)}>
+              {labelText.layout}
+            </span>
+            <div className="flex bg-slate-200/40 p-0.5 rounded-lg">
+              <button
+                type="button"
+                onClick={() => setPosLayout('list')}
+                className={cn(
+                  "px-3 py-1 rounded-md text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer",
+                  posLayout === 'list' 
+                    ? "bg-indigo-600 text-white shadow-sm"
+                    : cn("text-slate-600 hover:text-slate-900", posTheme !== 'white' && "text-slate-400 hover:text-white")
+                )}
+              >
+                <List size={14} />
+                <span>{labelText.list}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPosLayout('grid')}
+                className={cn(
+                  "px-3 py-1 rounded-md text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer",
+                  posLayout === 'grid' 
+                    ? "bg-indigo-600 text-white shadow-sm"
+                    : cn("text-slate-600 hover:text-slate-900", posTheme !== 'white' && "text-slate-400 hover:text-white")
+                )}
+              >
+                <LayoutGrid size={14} />
+                <span>{labelText.grid}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Theme / Background Options */}
+          <div className="flex items-center gap-2">
+            <span className={cn("text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5", theme.cardSec)}>
+              <Palette size={13} />
+              {labelText.theme}
+            </span>
+            <div className="flex gap-2">
+              {/* White Option */}
+              <button
+                type="button"
+                onClick={() => setPosTheme('white')}
+                className={cn(
+                  "px-2.5 py-1 text-xs font-black rounded-lg border flex items-center gap-1.5 transition-all cursor-pointer",
+                  posTheme === 'white'
+                    ? "bg-white text-slate-900 border-indigo-600 ring-2 ring-indigo-500/20"
+                    : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                )}
+              >
+                <div className="w-2 h-2 rounded-full bg-white border border-slate-300" />
+                <span>{labelText.white}</span>
+              </button>
+
+              {/* Dark Option */}
+              <button
+                type="button"
+                onClick={() => setPosTheme('dark')}
+                className={cn(
+                  "px-2.5 py-1 text-xs font-black rounded-lg border flex items-center gap-1.5 transition-all cursor-pointer",
+                  posTheme === 'dark'
+                    ? "bg-slate-800 text-slate-100 border-indigo-500 ring-2 ring-indigo-500/25"
+                    : "bg-slate-800/50 text-slate-300 border-slate-700 hover:bg-slate-750"
+                )}
+              >
+                <div className="w-2 h-2 rounded-full bg-slate-500" />
+                <span>{labelText.dark}</span>
+              </button>
+            </div>
+          </div>
         </div>
 
         <AnimatePresence>
@@ -233,43 +428,105 @@ export default function POS({ products, customers, shopInfo, onCompleteSale, lan
           )}
         </AnimatePresence>
 
-        <div className="flex-1 lg:overflow-y-auto pr-2 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 pb-4">
+        <div className={cn(
+          "flex-1 lg:overflow-y-auto pr-2 pb-4 scrollbar-thin scrollbar-thumb-slate-300/35",
+          posLayout === 'grid' 
+            ? "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4" 
+            : "flex flex-col gap-3"
+        )}>
           <AnimatePresence>
-            {filteredProducts.map((product) => (
-              <motion.button
-                layout
-                key={product.id}
-                onClick={() => addToCart(product)}
-                whileTap={{ scale: 0.98 }}
-                className="group pro-card text-left flex flex-col hover:-translate-y-1"
-              >
-                <div className="h-40 bg-slate-50 flex items-center justify-center text-slate-300 overflow-hidden relative border-b border-slate-100">
-                  {product.imageUrl ? (
-                    <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
-                  ) : (
-                    <Package size={48} className="opacity-20 text-slate-400" />
+            {filteredProducts.map((product) => {
+              if (posLayout === 'list') {
+                return (
+                  <motion.button
+                    layout
+                    key={product.id}
+                    onClick={() => addToCart(product)}
+                    whileTap={{ scale: 0.99 }}
+                    className={cn(
+                      "group text-left flex flex-row items-center p-3 rounded-2xl transition-all border duration-200 gap-4 cursor-pointer",
+                      theme.card
+                    )}
+                  >
+                    {/* Rectangle Thumbnail on Left */}
+                    <div className="w-16 h-16 sm:w-20 sm:h-20 shrink-0 bg-slate-100/50 flex items-center justify-center text-slate-300 overflow-hidden relative rounded-xl border border-slate-200/20">
+                      {product.imageUrl ? (
+                        <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
+                      ) : (
+                        <Package size={24} className="opacity-20 text-slate-400" />
+                      )}
+                    </div>
+
+                    {/* Product Metadata Right Section */}
+                    <div className="flex-1 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h4 className={cn("font-bold transition-all text-base leading-tight", theme.cardText)}>{product.name}</h4>
+                          <span className={cn("px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-tight", theme.categoryBadge)}>
+                            {product.category || t.uncategorized}
+                          </span>
+                        </div>
+                        <p className={cn("text-[9px] font-mono uppercase tracking-wider", theme.cardSec)}>{t.code}: #{product.id.slice(0, 8).toUpperCase()}</p>
+                      </div>
+
+                      <div className="flex items-center gap-5 shrink-0 justify-between sm:justify-end">
+                        <span className={cn("text-lg font-black", theme.price)}>{formatCurrency(product.price)}</span>
+                        <div>
+                          <span className={cn("block text-[11px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap", theme.stock)}>
+                            {t.stock}: {product.stock}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.button>
+                );
+              }
+
+              return (
+                <motion.button
+                  layout
+                  key={product.id}
+                  onClick={() => addToCart(product)}
+                  whileTap={{ scale: 0.98 }}
+                  className={cn(
+                    "group text-left flex flex-col hover:-translate-y-1 transition-all border rounded-3xl overflow-hidden cursor-pointer",
+                    theme.card
                   )}
-                  <div className="absolute top-3 left-3 px-2 py-1 bg-white/90 backdrop-blur-sm text-slate-800 rounded-lg text-[10px] font-bold uppercase tracking-tight shadow-sm border border-slate-200">
-                    {product.category || t.uncategorized}
-                  </div>
-                </div>
-                <div className="p-5 flex flex-col justify-between flex-1">
-                  <div>
-                    <h4 className="font-bold text-slate-900 group-hover:text-indigo-600 transition-all text-base line-clamp-1">{product.name}</h4>
-                    <p className="text-[10px] text-slate-400 font-medium mt-1 uppercase">{t.code}: #{product.id.slice(0, 8).toUpperCase()}</p>
-                  </div>
-                  <div className="mt-5 flex items-end justify-between">
-                    <span className="text-lg font-bold text-slate-900">{formatCurrency(product.price)}</span>
-                    <div className="text-right">
-                      <span className="block text-[11px] font-semibold text-indigo-600 px-2 py-0.5 bg-indigo-50 rounded-full">{t.stock}: {product.stock}</span>
+                >
+                  <div className="h-40 bg-slate-100/30 flex items-center justify-center text-slate-300 overflow-hidden relative border-b border-slate-100/10">
+                    {product.imageUrl ? (
+                      <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
+                    ) : (
+                      <Package size={48} className="opacity-20 text-slate-400" />
+                    )}
+                    <div className="absolute top-3 left-3 px-2 py-1 bg-white/90 backdrop-blur-sm text-slate-800 rounded-lg text-[10px] font-bold uppercase tracking-tight shadow-sm border border-slate-200">
+                      {product.category || t.uncategorized}
                     </div>
                   </div>
-                </div>
-              </motion.button>
-            ))}
+                  <div className="p-5 flex flex-col justify-between flex-1">
+                    <div>
+                      <h4 className={cn("font-bold transition-all text-base line-clamp-1", theme.cardText)}>{product.name}</h4>
+                      <p className={cn("text-[10px] font-medium mt-1 uppercase", theme.cardSec)}>{t.code}: #{product.id.slice(0, 8).toUpperCase()}</p>
+                    </div>
+                    <div className="mt-5 flex items-end justify-between">
+                      <span className={cn("text-lg font-bold", theme.price)}>{formatCurrency(product.price)}</span>
+                      <div className="text-right">
+                        <span className={cn("block text-[11px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap", theme.stock)}>
+                          {t.stock}: {product.stock}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </motion.button>
+              );
+            })}
           </AnimatePresence>
           {filteredProducts.length === 0 && (
-            <div className="col-span-full flex flex-col items-center justify-center p-12 text-gray-400 italic bg-white rounded-3xl border border-dashed border-gray-200">
+            <div className={cn(
+              "col-span-full flex flex-col items-center justify-center p-12 italic rounded-3xl border border-dashed transition-all",
+              posTheme === 'white' && "bg-white border-slate-200 text-slate-400",
+              posTheme === 'dark' && "bg-[#1e293b] border-slate-800 text-slate-400"
+            )}>
                <ShoppingBag size={48} className="mb-4 opacity-20" />
                {t.noSalesYet}
             </div>

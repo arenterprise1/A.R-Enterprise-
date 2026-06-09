@@ -1,6 +1,6 @@
 {
   "name": "এ.আর এন্টারপ্রাইজ (A.R Enterprise)",
   "description": "এ.আর এন্টারপ্রাইজ - একটি আধুনিক ও সহজ দোকান ম্যানেজমেন্ট অ্যাপ। এখন এতে রয়েছে শক্তিশালী বাংলা এআই অ্যাসিস্ট্যান্ট যা আপনাকে দোকান পরিচালনায় সাহায্য করবে। (A.R Enterprise - A modern POS & Inventory app with powerful Bengali AI Assistant.)",
-  "requestFramePermissions": ["camera"],
+  "requestFramePermissions": ["camera", "microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

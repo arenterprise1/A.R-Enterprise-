@@ -62,7 +62,7 @@ export default function StaffManagement({ userProfile, lang }: StaffManagementPr
     }
     setInviteLoading(true);
     try {
-      await setDoc(doc(db, 'invitations', cleanPhone), {
+      await setDoc(doc(db, 'invitations', `${cleanPhone}_${invitePassword}`), {
         phone: cleanPhone,
         password: invitePassword,
         role: inviteRole,

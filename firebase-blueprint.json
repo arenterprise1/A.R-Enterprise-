@@ -21,6 +21,7 @@
         "price": { "type": "number" },
         "purchasePrice": { "type": "number" },
         "stock": { "type": "number" },
+        "minStockLevel": { "type": "number", "description": "Minimum threshold for stock alerts" },
         "barcode": { "type": "string" },
         "category": { "type": "string" },
         "unit": { "type": "string" },
@@ -38,6 +39,8 @@
         "totalAmount": { "type": "number" },
         "discount": { "type": "number" },
         "payableAmount": { "type": "number" },
+        "dueAmount": { "type": "number", "description": "Outstanding amount (বাকি)" },
+        "paymentStatus": { "type": "string", "enum": ["paid", "partially_paid", "unpaid"] },
         "customerName": { "type": "string" },
         "customerPhone": { "type": "string" },
         "customerAddress": { "type": "string" },
@@ -56,6 +59,7 @@
         "phone": { "type": "string" },
         "address": { "type": "string" },
         "totalSales": { "type": "number" },
+        "totalDue": { "type": "number", "description": "Accumulated due balance across tickets (বাকি খাতা)" },
         "lastPurchaseDate": { "type": "number" },
         "shopId": { "type": "string" }
       },
@@ -67,11 +71,13 @@
       "type": "object",
       "properties": {
         "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "password": { "type": "string" },
         "role": { "type": "string", "enum": ["inventory_manager", "cashier"] },
         "shopId": { "type": "string" },
         "invitedBy": { "type": "string" }
       },
-      "required": ["email", "role", "shopId", "invitedBy"]
+      "required": ["role", "shopId", "invitedBy"]
     }
   },
   "firestore": {
@@ -79,9 +85,9 @@
       "schema": "User",
       "description": "User profiles and roles"
     },
-    "/invitations/{email}": {
+    "/invitations/{inviteId}": {
       "schema": "Invitation",
-      "description": "Pending staff invitations"
+      "description": "Pending staff invitations using secure email or phone_password keys"
     },
     "/products/{productId}": {
       "schema": "Product",
