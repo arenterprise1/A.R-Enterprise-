@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageSquare, X, Send, Bot, User, Minimize2, Maximize2, Mic, MicOff } from 'lucide-react';
+import { MessageSquare, X, Send, Bot, User, Minimize2, Maximize2, Mic, MicOff, Settings } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { Product, Sale } from '../types';
@@ -34,6 +34,16 @@ export default function GeminiAssistant({
   const [isListening, setIsListening] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
+
+  const [showSettings, setShowSettings] = useState(false);
+  const [customApiKey, setCustomApiKey] = useState<string>(() => {
+    try {
+      return localStorage.getItem('custom_gemini_api_key') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [tempKey, setTempKey] = useState(customApiKey);
 
   useEffect(() => {
     setMessages([
@@ -92,57 +102,125 @@ export default function GeminiAssistant({
 
     try {
       const inventorySummary = products.map(p => `${p.name} (Stock: ${p.stock}, Price: ${p.price})`).join(', ');
+      let result;
 
-      const response = await fetch('/api/gemini/assistant', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messages: messages,
-          userMessage: userMessage,
-          inventorySummary: inventorySummary,
-          lang: lang,
-        }),
-      });
+      if (customApiKey) {
+        // Dynamic load @google/genai SDK for static/PaaS environments running in browser
+        const { GoogleGenAI } = await import('@google/genai');
+        const ai = new GoogleGenAI({ apiKey: customApiKey });
 
-      if (!response.ok) {
-        throw new Error('Server API failed to process request');
+        const systemPrompt = `
+          You are an advanced retail POS voice/text smart assistant of "A.R. Enterprise" styled for Bangladesh retail.
+          You have direct dashboard and cart updating utilities via function calling.
+          
+          Current Inventory: [${inventorySummary || "Empty"}]
+          
+          CRITICAL RULES:
+          1. Correctly categorize user intents. If they are onboarding stock (adding inventory), use add_product_to_inventory. If they are making a sale, use add_product_to_cart.
+          2. If matching a tool, trigger it immediately.
+          3. Respond politely in ${lang === 'bn' ? 'Bengali' : 'English'}.
+        `;
+
+        const contentsPayload = [
+          { role: 'user' as const, parts: [{ text: systemPrompt }] },
+          ...messages.map((m) => ({
+            role: (m.role === 'assistant' ? 'model' : 'user') as 'user' | 'model',
+            parts: [{ text: m.content }]
+          })),
+          { role: 'user' as const, parts: [{ text: userMessage }] }
+        ];
+
+        const addProductToInventoryTool = {
+          name: 'add_product_to_inventory',
+          description: 'Use this tool when the shop owner/staff explicitly wants to add new inventory stock or update an existing products stock level in the inventory. (e.g., "দোকানে ৫০ পিস লাক্স সাবান আনলাম")',
+          parameters: {
+            type: 'OBJECT',
+            properties: {
+              productName: { type: 'STRING', description: 'The exact or clean name of the product in Bengali or English.' },
+              quantity: { type: 'NUMBER', description: 'The total stock quantity being added.' }
+            },
+            required: ['productName']
+          }
+        } as any;
+
+        const addProductToCartTool = {
+          name: 'add_product_to_cart',
+          description: 'Use this tool when a customer wants to buy items, or when selling products via POS. This adds items to the current sales cart. (e.g., "২ কেজি মিনিকেট চাল আর ১টি তেল বিক্রি করো")',
+          parameters: {
+            type: 'OBJECT',
+            properties: {
+              productName: { type: 'STRING', description: 'The name of the product being sold.' },
+              quantity: { type: 'NUMBER', description: 'The quantity being purchased.' }
+            },
+            required: ['productName']
+          }
+        } as any;
+
+        const responseObj = await ai.models.generateContent({
+          model: "gemini-3.5-flash",
+          contents: contentsPayload,
+          config: {
+            tools: [{ functionDeclarations: [addProductToInventoryTool, addProductToCartTool] }]
+          }
+        });
+
+        result = {
+          text: responseObj.text,
+          functionCalls: responseObj.functionCalls || null
+        };
+      } else {
+        // Standard full-stack server proxy request
+        const response = await fetch('/api/gemini/assistant', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            messages: messages,
+            userMessage: userMessage,
+            inventorySummary: inventorySummary,
+            lang: lang,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Server API failed to process request');
+        }
+
+        result = await response.json();
       }
 
-      const result = await response.json();
-
-      // Check if Gemini invoked any action/tools on the server
+      // Check if Gemini invoked any action/tools on the server or client fallback
       if (result.functionCalls && result.functionCalls.length > 0) {
         const call = result.functionCalls[0];
         const args = call.args as any;
 
         if (call.name === 'add_product_to_inventory') {
           if (onAddProductDirectly) {
-            onAddProductDirectly(args.productName, args.quantity);
+            onAddProductDirectly(args.productName, args.quantity || 1);
           } else {
             // Dispatch dynamic window event for global integration decoupler
             window.dispatchEvent(new CustomEvent('add-to-inventory-direct', {
-              detail: { productName: args.productName, quantity: args.quantity }
+              detail: { productName: args.productName, quantity: args.quantity || 1 }
             }));
           }
           setMessages(prev => [...prev, { 
             role: 'assistant', 
-            content: `✅ সফলভাবে ইনভেন্টরিতে পণ্য স্টক করা হয়েছে:\n📦 পণ্য: ${args.productName}\n🔢 পরিমাণ: ${args.quantity} টি।` 
+            content: `✅ সফলভাবে ইনভেন্টরিতে পণ্য স্টক করা হয়েছে:\n📦 পণ্য: ${args.productName}\n🔢 পরিমাণ: ${args.quantity || 1} টি।` 
           }]);
         } 
         else if (call.name === 'add_product_to_cart') {
           if (onAddToCartDirectly) {
-            onAddToCartDirectly(args.productName, args.quantity);
+            onAddToCartDirectly(args.productName, args.quantity || 1);
           } else {
             // Dispatch dynamic window event which POS component listens to
             window.dispatchEvent(new CustomEvent('add-to-cart-direct', {
-              detail: { productName: args.productName, quantity: args.quantity }
+              detail: { productName: args.productName, quantity: args.quantity || 1 }
             }));
           }
           setMessages(prev => [...prev, { 
             role: 'assistant', 
-            content: `🛒 বিক্রির রসিদে (POS Cart) পণ্য যুক্ত করা হয়েছে:\n🛍️ পণ্য: ${args.productName}\n🔢 পরিমাণ: ${args.quantity} টি।` 
+            content: `🛒 বিক্রির রসিদে (POS Cart) পণ্য যুক্ত করা হয়েছে:\n🛍️ পণ্য: ${args.productName}\n🔢 পরিমাণ: ${args.quantity || 1} টি।` 
           }]);
         }
       } else {
@@ -152,7 +230,23 @@ export default function GeminiAssistant({
 
     } catch (error) {
       console.error("Gemini Error:", error);
-      setMessages(prev => [...prev, { role: 'assistant', content: lang === 'bn' ? "দুঃখিত, এআই প্রসেস করতে সমস্যা হচ্ছে। পরে চেষ্টা করুন।" : "Sorry, AI failed to process. Please try again." }]);
+      const isGithubPages = window.location.hostname.endsWith('github.io') || window.location.pathname.includes('github.io');
+      
+      if (!customApiKey && isGithubPages) {
+        setMessages(prev => [...prev, { 
+          role: 'assistant', 
+          content: lang === 'bn' 
+            ? "⚠️ আপনি অ্যাপটি GitHub Pages (স্ট্যাটিক হোস্ট) এ চালাচ্ছেন। ব্যাকএন্ড এআই কাজ করছে না। চ্যাটের উপরে গিয়ার (Settings) আইকনে ক্লিক করে আপনার নিজস্ব Gemini API Key সেট করুন।" 
+            : "⚠️ You are running the app on GitHub Pages (static host). Server backend AI is unavailable. Please click the Settings (Gear) icon at the top to set your custom Gemini API Key." 
+        }]);
+      } else {
+        setMessages(prev => [...prev, { 
+          role: 'assistant', 
+          content: lang === 'bn' 
+            ? "দুঃখিত, এআই প্রসেস করতে সমস্যা হচ্ছে। পরে চেষ্টা করুন বা গিয়ার আইকন থেকে নিজস্ব এপিআই কী যুক্ত করুন।" 
+            : "Sorry, AI failed to process. Please try again or add your own API Key from the settings gear icon." 
+        }]);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -186,6 +280,16 @@ export default function GeminiAssistant({
                 </div>
               </div>
               <div className="flex items-center gap-1">
+                <button 
+                  onClick={() => {
+                    setShowSettings(!showSettings);
+                    setIsMinimized(false);
+                  }} 
+                  className={cn("p-1.5 hover:bg-white/10 rounded-full transition-colors", showSettings && "bg-white/20")}
+                  title={lang === 'bn' ? 'এআই সেটিংস' : 'AI Settings'}
+                >
+                  <Settings size={16} />
+                </button>
                 <button onClick={() => setIsMinimized(!isMinimized)} className="p-1.5 hover:bg-white/10 rounded-full transition-colors">
                   {isMinimized ? <Maximize2 size={16} /> : <Minimize2 size={16} />}
                 </button>
@@ -195,7 +299,76 @@ export default function GeminiAssistant({
               </div>
             </div>
 
-            {!isMinimized && (
+            {!isMinimized && showSettings && (
+              <div className="flex-1 overflow-y-auto p-5 bg-slate-50 flex flex-col justify-between">
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 text-slate-900 border-b border-slate-200 pb-2">
+                    <Settings size={18} className="text-indigo-600" />
+                    <h5 className="font-bold text-sm">{lang === 'bn' ? 'এআই অ্যাসিস্ট্যান্ট সেটিংস' : 'AI Assistant Settings'}</h5>
+                  </div>
+                  
+                  <div className="text-[11px] text-slate-600 leading-relaxed bg-indigo-50/50 p-3 rounded-2xl border border-indigo-100/40">
+                    <p className="font-bold text-indigo-700 mb-1">
+                      {lang === 'bn' ? '💡 GitHub Pages ব্যাকআপ এপিআই' : '💡 GitHub Pages Friendly AI'}
+                    </p>
+                    {lang === 'bn' 
+                      ? "আপনি যখন অ্যাপটি GitHub Pages বা স্ট্যাটিক সার্ভারে হোস্ট করবেন, তখন ব্যাকএন্ড এপিআই কাজ করবে না। নিচে আপনার নিজস্ব Gemini API Key প্রদান করলে, ব্রাউজার থেকেই সরাসরি এআই কথা বলবে।" 
+                      : "When hosting on GitHub Pages or static hosts, backend endpoints will not be available. Enter your own Gemini API Key here to run AI directly from your browser securely."}
+                  </div>
+                  
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] uppercase tracking-wider font-extrabold text-slate-500">
+                      {lang === 'bn' ? 'জেমিনি এপিআই কি (Gemini API Key)' : 'Gemini API Key'}
+                    </label>
+                    <input
+                      type="password"
+                      value={tempKey}
+                      onChange={(e) => setTempKey(e.target.value)}
+                      placeholder="AIzaSy..."
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs focus:border-indigo-500 outline-none transition-all placeholder:text-slate-400"
+                    />
+                  </div>
+                  
+                  <p className="text-[10px] text-red-500 font-medium">
+                    {lang === 'bn' 
+                      ? "⚠️ নিরাপত্তা সতর্কতা: ক্লায়েন্ট-সাইড এপিআই কি ব্রাউজারের লোকালে থাকে। আপনার কি গোপন রাখুন।" 
+                      : "⚠️ Security warning: Client-side keys are stored locally. Keep your API key confidential."}
+                  </p>
+                </div>
+                
+                <div className="flex gap-2 pt-4 border-t border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try {
+                        localStorage.setItem('custom_gemini_api_key', tempKey.trim());
+                        setCustomApiKey(tempKey.trim());
+                        setShowSettings(false);
+                      } catch {}
+                    }}
+                    className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs py-2 px-3 rounded-xl transition-all shadow-md shadow-indigo-100 cursor-pointer"
+                  >
+                    {lang === 'bn' ? 'সেভ করুন' : 'Save Key'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try {
+                        localStorage.removeItem('custom_gemini_api_key');
+                        setTempKey('');
+                        setCustomApiKey('');
+                        setShowSettings(false);
+                      } catch {}
+                    }}
+                    className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs py-2 px-3 rounded-xl transition-all cursor-pointer"
+                  >
+                    {lang === 'bn' ? 'মুছে ফেলুন' : 'Clear Key'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {!isMinimized && !showSettings && (
               <>
                 {/* Messages Body */}
                 <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/30 custom-scrollbar">
@@ -263,6 +436,7 @@ export default function GeminiAssistant({
         onClick={() => {
           setIsOpen(!isOpen);
           setIsMinimized(false);
+          setShowSettings(false);
         }}
         className={cn("w-14 h-14 rounded-full shadow-2xl flex items-center justify-center transition-all duration-500", isOpen ? "bg-indigo-600 text-white rotate-0" : "bg-black text-white hover:bg-slate-900")}
       >
