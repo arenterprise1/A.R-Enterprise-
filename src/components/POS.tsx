@@ -3,9 +3,9 @@ import {
   Search, ShoppingBag, ShoppingCart, Trash2, ChevronRight, ChevronDown, CheckCircle2, 
   User, UserPlus, Phone, MapPin, Package, Camera, X, LayoutGrid, List, Palette,
   CreditCard, QrCode, Percent, Tag, Award, Send, Check, CheckCircle,
-  PhoneCall, Mail, Smile, Sparkles, Network, RefreshCw
+  PhoneCall, Mail, Smile, Sparkles, Network, RefreshCw, Coins
 } from 'lucide-react';
-import { Product, SaleItem, Customer, Sale, ShopInfo } from '../types';
+import { Product, SaleItem, Customer, Sale, ShopInfo, EMIDetails } from '../types';
 import { formatCurrency, cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { Html5Qrcode } from 'html5-qrcode';
@@ -30,12 +30,18 @@ interface POSProps {
       receiptSentType?: 'sms' | 'email';
       receiptSentValue?: string;
       offline?: boolean;
+      salesmanId?: string;
+      salesmanName?: string;
+      commissionAmount?: number;
+      isEMI?: boolean;
+      emiDetails?: EMIDetails;
     }
   ) => Promise<Sale | null>;
   lang: Language;
+  staff?: any[];
 }
 
-export default function POS({ products, customers, shopInfo, onCompleteSale, lang }: POSProps) {
+export default function POS({ products, customers, shopInfo, onCompleteSale, lang, staff = [] }: POSProps) {
   const t = translations[lang];
   const [searchQuery, setSearchQuery] = useState('');
   const [mobileTab, setMobileTab] = useState<'products' | 'cart'>('products');
@@ -48,14 +54,7 @@ export default function POS({ products, customers, shopInfo, onCompleteSale, lan
     }
   });
 
-  const [posTheme, setPosTheme] = useState<'white' | 'dark'>(() => {
-    try {
-      const saved = localStorage.getItem('pos_theme');
-      return saved === 'white' ? 'white' : 'dark';
-    } catch {
-      return 'dark';
-    }
-  });
+  const [posTheme] = useState<'white' | 'dark'>('dark');
 
   useEffect(() => {
     try {
@@ -63,14 +62,12 @@ export default function POS({ products, customers, shopInfo, onCompleteSale, lan
     } catch (e) {}
   }, [posLayout]);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('pos_theme', posTheme);
-    } catch (e) {}
-  }, [posTheme]);
-
   // Extended Advanced POS State Variables
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'bkash' | 'nagad' | 'rocket' | 'qr'>('cash');
+  const [isEMIMode, setIsEMIMode] = useState(false);
+  const [emiInstallments, setEmiInstallments] = useState(3);
+  const [emiDownPayment, setEmiDownPayment] = useState(0);
+  const [emiInterval, setEmiInterval] = useState<'monthly' | 'weekly'>('monthly');
   const [discountVal, setDiscountVal] = useState(0);
   const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('fixed');
   
@@ -93,6 +90,7 @@ export default function POS({ products, customers, shopInfo, onCompleteSale, lan
   const [cart, setCart] = useState<SaleItem[]>([]);
   const [showCustomerForm, setShowCustomerForm] = useState(false);
   const [customerSearch, setCustomerSearch] = useState('');
+  const [selectedSalesmanId, setSelectedSalesmanId] = useState('');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
 
   const showLocalToast = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
@@ -325,6 +323,54 @@ export default function POS({ products, customers, shopInfo, onCompleteSale, lan
     const payableAmount = Math.max(0, cartTotal - totalDiscount);
     const pointsValueEarned = Math.floor(payableAmount / 100);
 
+    // Validate Serial numbers
+    for (const item of cart) {
+      const prod = products.find(p => p.id === item.productId);
+      if (prod?.requiresSerial) {
+        const serialsEntered = item.serialNumbers?.filter(Boolean) || [];
+        if (serialsEntered.length < item.quantity) {
+          showLocalToast(
+            lang === 'bn'
+              ? `'${item.productName}' এর জন্য প্রতিটি আইটেমের সিরিয়াল/IMEI প্রবেশ করান!`
+              : `Please enter serial/IMEI for all units of '${item.productName}'!`,
+            'error'
+          );
+          return;
+        }
+      }
+    }
+
+    const hasEMIElegibleProduct = cart.some(item => {
+      const prod = products.find(p => p.id === item.productId);
+      return !!prod?.hasEMI;
+    });
+
+    const isEmiActive = isEMIMode && hasEMIElegibleProduct;
+
+    // Build installment payments schedule if active
+    const calculatedEmiDetails = isEmiActive ? {
+      downPayment: emiDownPayment,
+      totalInstallments: emiInstallments,
+      paidInstallments: 0,
+      installmentAmount: Math.ceil(Math.max(0, payableAmount - emiDownPayment) / emiInstallments),
+      installmentInterval: emiInterval,
+      nextInstallmentDate: Date.now() + (emiInterval === 'monthly' ? 30 * 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000),
+      installmentHistory: []
+    } : undefined;
+
+    const salesmanObj = staff.find(s => s.uid === selectedSalesmanId);
+    let totalCommissionAmount = 0;
+    cart.forEach(item => {
+      const p = products.find(prod => prod.id === item.productId);
+      const commType = p?.commissionType || 'flat';
+      const commVal = p?.commissionValue || 0;
+      if (commType === 'flat') {
+        totalCommissionAmount += commVal * item.quantity;
+      } else {
+        totalCommissionAmount += ((commVal / 100) * item.price) * item.quantity;
+      }
+    });
+
     const sale = await onCompleteSale(
       cart, 
       totalDiscount, 
@@ -338,7 +384,12 @@ export default function POS({ products, customers, shopInfo, onCompleteSale, lan
         digitalReceiptSent: digitalReceiptType !== 'none' && digitalReceiptSent,
         receiptSentType: digitalReceiptType !== 'none' ? digitalReceiptType : undefined,
         receiptSentValue: digitalReceiptType !== 'none' ? receiptValue : undefined,
-        offline: !navigator.onLine
+        offline: !navigator.onLine,
+        isEMI: isEmiActive,
+        emiDetails: calculatedEmiDetails,
+        salesmanId: selectedSalesmanId || undefined,
+        salesmanName: salesmanObj?.name || undefined,
+        commissionAmount: totalCommissionAmount || 0
       }
     );
 
@@ -361,6 +412,10 @@ export default function POS({ products, customers, shopInfo, onCompleteSale, lan
       setCustomerInfo({ name: '', phone: '', address: '', saveToDatabase: true });
       setCustomerSearch('');
       setShowCustomerForm(false);
+      setIsEMIMode(false);
+      setEmiInstallments(3);
+      setEmiDownPayment(0);
+      setEmiInterval('monthly');
     }
   };
 
@@ -558,12 +613,7 @@ export default function POS({ products, customers, shopInfo, onCompleteSale, lan
                 <button
                   key={p.id}
                   onClick={() => handleScanSuccess(p.barcode!)}
-                  className={cn(
-                    "px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition-all cursor-pointer active:scale-95",
-                    posTheme === 'white' 
-                      ? "bg-white hover:bg-slate-100 border-slate-200 text-slate-500" 
-                      : "bg-[#1e293b] hover:bg-slate-700 border-slate-700 text-slate-400"
-                  )}
+                  className="px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition-all cursor-pointer active:scale-95 bg-[#1e293b] hover:bg-slate-700 border-slate-700 text-slate-400"
                   title={`Quick-scan: ${p.name}`}
                 >
                   📟 {p.barcode}
@@ -573,12 +623,8 @@ export default function POS({ products, customers, shopInfo, onCompleteSale, lan
           </div>
         </div>
 
-        {/* Layout & Background Options Bar */}
-        <div className={cn(
-          "flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-2xl border transition-all duration-300",
-          posTheme === 'white' && "bg-white border-slate-200/85 shadow-sm",
-          posTheme === 'dark' && "bg-slate-800/35 border-slate-800/60"
-        )}>
+        {/* Layout Options Bar */}
+        <div className="flex items-center gap-3 p-3 bg-slate-800/35 border border-slate-800/60 rounded-2xl transition-all duration-300">
           {/* Layout Toggle */}
           <div className="flex items-center gap-2">
             <span className={cn("text-[10px] font-black uppercase tracking-widest", theme.cardSec)}>
@@ -592,7 +638,7 @@ export default function POS({ products, customers, shopInfo, onCompleteSale, lan
                   "px-3 py-1 rounded-md text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer",
                   posLayout === 'list' 
                     ? "bg-indigo-600 text-white shadow-sm"
-                    : cn("text-slate-600 hover:text-slate-900", posTheme !== 'white' && "text-slate-400 hover:text-white")
+                    : "text-slate-400 hover:text-white"
                 )}
               >
                 <List size={14} />
@@ -605,50 +651,11 @@ export default function POS({ products, customers, shopInfo, onCompleteSale, lan
                   "px-3 py-1 rounded-md text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer",
                   posLayout === 'grid' 
                     ? "bg-indigo-600 text-white shadow-sm"
-                    : cn("text-slate-600 hover:text-slate-900", posTheme !== 'white' && "text-slate-400 hover:text-white")
+                    : "text-slate-400 hover:text-white"
                 )}
               >
                 <LayoutGrid size={14} />
                 <span>{labelText.grid}</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Theme / Background Options */}
-          <div className="flex items-center gap-2">
-            <span className={cn("text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5", theme.cardSec)}>
-              <Palette size={13} />
-              {labelText.theme}
-            </span>
-            <div className="flex gap-2">
-              {/* White Option */}
-              <button
-                type="button"
-                onClick={() => setPosTheme('white')}
-                className={cn(
-                  "px-2.5 py-1 text-xs font-black rounded-lg border flex items-center gap-1.5 transition-all cursor-pointer",
-                  posTheme === 'white'
-                    ? "bg-white text-slate-900 border-indigo-600 ring-2 ring-indigo-500/20"
-                    : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-                )}
-              >
-                <div className="w-2 h-2 rounded-full bg-white border border-slate-300" />
-                <span>{labelText.white}</span>
-              </button>
-
-              {/* Dark Option */}
-              <button
-                type="button"
-                onClick={() => setPosTheme('dark')}
-                className={cn(
-                  "px-2.5 py-1 text-xs font-black rounded-lg border flex items-center gap-1.5 transition-all cursor-pointer",
-                  posTheme === 'dark'
-                    ? "bg-slate-800 text-slate-100 border-indigo-500 ring-2 ring-indigo-500/25"
-                    : "bg-slate-800/50 text-slate-300 border-slate-700 hover:bg-slate-750"
-                )}
-              >
-                <div className="w-2 h-2 rounded-full bg-slate-500" />
-                <span>{labelText.dark}</span>
               </button>
             </div>
           </div>
@@ -716,6 +723,9 @@ export default function POS({ products, customers, shopInfo, onCompleteSale, lan
                           </span>
                         </div>
                         <p className={cn("text-[9px] font-mono uppercase tracking-wider", theme.cardSec)}>{t.code}: #{product.id.slice(0, 8).toUpperCase()}</p>
+                        {product.technicalSpecs && (
+                          <p className="text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold italic">⚙️ Specs: {product.technicalSpecs}</p>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-5 shrink-0 justify-between sm:justify-end">
@@ -756,6 +766,9 @@ export default function POS({ products, customers, shopInfo, onCompleteSale, lan
                     <div>
                       <h4 className={cn("font-black transition-all text-lg leading-snug line-clamp-2 h-12", theme.cardText)}>{product.name}</h4>
                       <p className={cn("text-[10px] font-medium uppercase tracking-wider", theme.cardSec)}>{t.code}: #{product.id.slice(0, 8).toUpperCase()}</p>
+                      {product.technicalSpecs && (
+                        <p className="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold italic line-clamp-1 mt-1">⚙️ Specs: {product.technicalSpecs}</p>
+                      )}
                     </div>
                     <div className="flex items-end justify-between">
                       <span className={cn("text-xl font-black font-sans leading-none", theme.price)}>{formatCurrency(product.price)}</span>
@@ -817,6 +830,35 @@ export default function POS({ products, customers, shopInfo, onCompleteSale, lan
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-5 custom-scrollbar">
+          {/* Sales representative Selection for Automated Commissions */}
+          <div className={cn(
+            "p-4 rounded-xl border flex flex-col gap-2 transition-all",
+            posTheme === 'white' ? "bg-slate-50 border-slate-200" : "bg-slate-900/60 border-slate-800"
+          )}>
+            <div className="flex items-center gap-2 text-indigo-500">
+              <Coins size={14} />
+              <span className="text-[10px] font-black uppercase tracking-wider">
+                {lang === 'bn' ? 'বিক্রয় কর্মী কমিশন বরাদ্দ' : 'Sales Representative Commission'}
+              </span>
+            </div>
+            
+            <select
+              value={selectedSalesmanId}
+              onChange={(e) => setSelectedSalesmanId(e.target.value)}
+              className={cn(
+                "w-full px-4 py-2.5 text-xs font-bold rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500",
+                posTheme === 'white' ? "bg-white border text-slate-700" : "bg-slate-950 border-slate-850 text-slate-300"
+              )}
+            >
+              <option value="">{lang === 'bn' ? 'বিক্রয় কর্মী নির্বাচন করুন (ঐচ্ছিক)' : 'Select Representative (Optional)'}</option>
+              {staff.map(s => (
+                <option key={s.uid} value={s.uid}>
+                  {s.name} ({s.role})
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className="mb-2">
             <button 
               onClick={() => setShowCustomerForm(!showCustomerForm)}
@@ -1041,6 +1083,40 @@ export default function POS({ products, customers, shopInfo, onCompleteSale, lan
                       </p>
                     </div>
                   </div>
+
+                  {/* Serial / IMEI Input inside Cart Item */}
+                  {prod?.requiresSerial && (
+                    <div className="mt-3 p-3 rounded-xl bg-indigo-50/50 dark:bg-slate-900/40 border border-indigo-100/50 dark:border-slate-800/40 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-black uppercase text-indigo-700 dark:text-indigo-400 tracking-wider flex items-center gap-1">
+                          🔒 {lang === 'bn' ? 'সিরিয়াল / IMEI নম্বর দিন' : 'Enter Serial / IMEI'}
+                        </label>
+                        <span className="text-[9px] text-slate-500 font-bold">
+                          {lang === 'bn' ? `${item.quantity}টি নাম্বার প্রয়োজন` : `${item.quantity} numbers required`}
+                        </span>
+                      </div>
+                      <input
+                        type="text"
+                        placeholder={lang === 'bn' ? 'সিরিয়ালগুলি কমা দিয়ে লিখুন (যেমন: SN123, SN456)' : 'Type serials separated by commas (e.g. SN123, SN456)'}
+                        value={item.serialNumbers?.join(', ') || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const list = val.split(',').map(s => s.trim());
+                          setCart(prev => prev.map(c => c.productId === item.productId ? { ...c, serialNumbers: list } : c));
+                        }}
+                        className={cn("w-full px-3 py-1.5 rounded-lg text-xs font-mono font-bold tracking-wider",
+                          posTheme === 'white' 
+                            ? "bg-white border border-slate-200 text-slate-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" 
+                            : "bg-slate-900 border border-slate-700 text-white focus:border-indigo-400"
+                        )}
+                      />
+                      {(!item.serialNumbers || item.serialNumbers.filter(Boolean).length < item.quantity) && (
+                        <p className="text-[9px] text-rose-500 font-black animate-pulse">
+                          ⚠️ {lang === 'bn' ? 'দয়া করে সবগুলো আইটেমের সিরিয়াল/IMEI নম্বর প্রদান করুন!' : 'Please enter serial/IMEI for all units!'}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </motion.div>
               );
             })}
@@ -1260,6 +1336,147 @@ export default function POS({ products, customers, shopInfo, onCompleteSale, lan
                     </div>
                   )}
                 </div>
+
+                {/* EMI Installment Billing section */}
+                {cart.length > 0 && cart.some(item => {
+                  const prod = products.find(p => p.id === item.productId);
+                  return !!prod?.hasEMI;
+                }) && (
+                  <div className={cn(
+                    "border p-4.5 rounded-2xl shadow-sm space-y-3 transition-colors duration-150",
+                    posTheme === 'white' ? "bg-white border-slate-200" : "bg-slate-800/30 border-slate-700/60"
+                  )}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">💳</span>
+                        <div>
+                          <p className={cn("text-xs font-black uppercase tracking-wider",
+                            posTheme === 'white' ? "text-slate-800" : "text-white"
+                          )}>
+                            {lang === 'bn' ? 'কিস্তিতে পেমেন্ট (EMI)' : 'Installment Checkout (EMI)'}
+                          </p>
+                          <p className="text-[10px] text-slate-400">
+                            {lang === 'bn' ? 'কার্ট-এ কিস্তিযোগ্য পণ্য রয়েছে' : 'EMI eligible products are in cart'}
+                          </p>
+                        </div>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={isEMIMode}
+                          onChange={(e) => {
+                            setIsEMIMode(e.target.checked);
+                            if (e.target.checked) {
+                              setEmiDownPayment(Math.floor(calculatedPayable * 0.2)); // Suggest 20% down payment
+                            } else {
+                              setEmiDownPayment(0);
+                            }
+                          }}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                      </label>
+                    </div>
+
+                    {isEMIMode && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        className="space-y-3 border-t border-dashed border-slate-100 dark:border-slate-700/50 pt-3"
+                      >
+                        {/* Down Payment amount */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="block text-[10px] font-black uppercase text-slate-450 text-slate-400 tracking-wider">
+                              {lang === 'bn' ? 'ডাউন পেমেন্ট' : 'Down Payment'}
+                            </label>
+                            <div className="relative">
+                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold">৳</span>
+                              <input
+                                type="number"
+                                value={emiDownPayment}
+                                onChange={(e) => setEmiDownPayment(Math.min(calculatedPayable, Math.max(0, parseFloat(e.target.value) || 0)))}
+                                className={cn("w-full pl-6 pr-2 py-1.5 rounded-xl border text-xs font-black",
+                                  posTheme === 'white' ? "bg-slate-50 border-slate-200 text-slate-900" : "bg-slate-900 border-slate-700 text-white"
+                                )}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="block text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                              {lang === 'bn' ? 'কিস্তি সংখ্যা' : 'Installments'}
+                            </label>
+                            <select
+                              value={emiInstallments}
+                              onChange={(e) => setEmiInstallments(parseInt(e.target.value))}
+                              className={cn("w-full px-2.5 py-1.5 rounded-xl border text-xs font-black cursor-pointer",
+                                posTheme === 'white' ? "bg-slate-0 bg-white border-slate-200 text-slate-900 font-sans" : "bg-slate-900 border-slate-700 text-white font-sans"
+                              )}
+                            >
+                              <option value={3}>৩ {lang === 'bn' ? 'মাস/ সপ্তাহ' : 'Installments'}</option>
+                              <option value={6}>৬ {lang === 'bn' ? 'মাস/ সপ্তাহ' : 'Installments'}</option>
+                              <option value={12}>১২ {lang === 'bn' ? 'মাস/ সপ্তাহ' : 'Installments'}</option>
+                              <option value={18}>১৮ {lang === 'bn' ? 'মাস/ সপ্তাহ' : 'Installments'}</option>
+                              <option value={24}>২৪ {lang === 'bn' ? 'মাস/ সপ্তাহ' : 'Installments'}</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Interval selection */}
+                        <div className="space-y-1">
+                          <label className="block text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                            {lang === 'bn' ? 'কিস্তির ব্যবধান' : 'Installment Interval'}
+                          </label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setEmiInterval('monthly')}
+                              className={cn("py-1 border rounded-lg text-[10px] font-black tracking-wider transition-all cursor-pointer",
+                                emiInterval === 'monthly'
+                                  ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                                  : posTheme === 'white' ? "bg-slate-50 text-slate-650 border-slate-200 hover:bg-slate-100" : "bg-slate-900 text-slate-400 border-slate-700 hover:bg-slate-800"
+                              )}
+                            >
+                              {lang === 'bn' ? 'মাসিক কিস্তি' : 'Monthly Interval'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEmiInterval('weekly')}
+                              className={cn("py-1 border rounded-lg text-[10px] font-black tracking-wider transition-all cursor-pointer",
+                                emiInterval === 'weekly'
+                                  ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                                  : posTheme === 'white' ? "bg-slate-50 text-slate-650 border-slate-200 hover:bg-slate-100" : "bg-slate-900 text-slate-400 border-slate-700 hover:bg-slate-800"
+                              )}
+                            >
+                              {lang === 'bn' ? 'সাপ্তাহিক কিস্তি' : 'Weekly Interval'}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Live computations Display area */}
+                        <div className="p-3 bg-indigo-50/40 dark:bg-slate-900/40 rounded-xl space-y-1 text-slate-700 dark:text-slate-300">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="font-semibold">{lang === 'bn' ? 'কিস্তিযোগ্য মূল্য' : 'Installment Balance'}</span>
+                            <span className="font-sans font-black">{formatCurrency(calculatedPayable - emiDownPayment)}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="font-semibold text-indigo-700 dark:text-indigo-400">{lang === 'bn' ? 'প্রতি কিস্তির পরিমাণ' : 'Installment Fee'}</span>
+                            <span className="font-sans font-black text-indigo-700 dark:text-indigo-400">
+                              {formatCurrency(Math.ceil(Math.max(0, calculatedPayable - emiDownPayment) / emiInstallments))}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t border-indigo-100/10">
+                            <span>{lang === 'bn' ? 'পরবর্তী কিস্তির তারিখ' : 'First Installment Date'}</span>
+                            <span className="font-bold">
+                              {new Date(Date.now() + (emiInterval === 'monthly' ? 30 * 24 * 3600 * 1000 : 7 * 24 * 3600 * 1000)).toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            </span>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </div>
+                )}
 
                 {/* 2. Multiple Payment Methods Row */}
                 <div className="space-y-3">

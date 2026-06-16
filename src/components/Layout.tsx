@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { LayoutDashboard, Package, ShoppingCart, History, Store, Menu, X, Settings as SettingsIcon, Users, Wifi, WifiOff, Calculator as CalculatorIcon, Camera, Upload, Image as ImageIcon, Save, Phone, MapPin, Edit, Sparkles, LogOut } from 'lucide-react';
+import { LayoutDashboard, Package, ShoppingCart, History, Store, Menu, X, Settings as SettingsIcon, Users, Wifi, WifiOff, Calculator as CalculatorIcon, Camera, Upload, Image as ImageIcon, Save, Phone, MapPin, Edit, Sparkles, LogOut, Wrench, RefreshCw, ShieldCheck, Warehouse, Coins, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { View, UserProfile, UserRole, ShopInfo } from '../types';
@@ -20,23 +20,23 @@ interface LayoutProps {
   shopInfo?: ShopInfo;
   onUpdateShopInfo?: (info: ShopInfo) => void;
   onUpgradeClick?: () => void;
+  appTheme: 'white' | 'dark';
+  onAppThemeChange: (theme: 'white' | 'dark') => void;
 }
 
-export default function Layout({ children, activeView, onViewChange, userProfile, lang, onLanguageChange, shopInfo, onUpdateShopInfo, onUpgradeClick }: LayoutProps) {
-  const [appTheme, setAppTheme] = useState<'white' | 'dark'>(() => {
-    try {
-      const saved = localStorage.getItem('app_theme');
-      return saved === 'white' ? 'white' : 'dark';
-    } catch {
-      return 'dark';
-    }
-  });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('app_theme', appTheme);
-    } catch {}
-  }, [appTheme]);
+export default function Layout({ 
+  children, 
+  activeView, 
+  onViewChange, 
+  userProfile, 
+  lang, 
+  onLanguageChange, 
+  shopInfo, 
+  onUpdateShopInfo, 
+  onUpgradeClick,
+  appTheme,
+  onAppThemeChange
+}: LayoutProps) {
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth > 1024);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -162,6 +162,11 @@ export default function Layout({ children, activeView, onViewChange, userProfile
     { id: 'dashboard', label: t.dashboard, icon: LayoutDashboard, roles: ['owner', 'inventory_manager', 'cashier'] },
     { id: 'pos', label: t.pos, icon: ShoppingCart, roles: ['owner', 'cashier'] },
     { id: 'inventory', label: t.inventory, icon: Package, roles: ['owner', 'inventory_manager'] },
+    { id: 'warehouses', label: t.warehouses, icon: Warehouse, roles: ['owner', 'inventory_manager'] },
+    { id: 'servicing', label: t.servicing, icon: Wrench, roles: ['owner', 'inventory_manager', 'cashier'] },
+    { id: 'rma', label: t.rma, icon: ShieldCheck, roles: ['owner', 'inventory_manager', 'cashier'] },
+    { id: 'commissions', label: t.commissions, icon: Coins, roles: ['owner', 'cashier'] },
+    { id: 'smartsearch', label: t.smartsearch, icon: Search, roles: ['owner', 'inventory_manager', 'cashier'] },
     { id: 'customers', label: t.customers, icon: Users, roles: ['owner', 'cashier'] },
     { id: 'history', label: t.history, icon: History, roles: ['owner', 'inventory_manager', 'cashier'] },
     { id: 'staff', label: t.staff, icon: Store, roles: ['owner'] },
@@ -188,8 +193,8 @@ export default function Layout({ children, activeView, onViewChange, userProfile
   return (
     <div className={cn(
       "flex h-screen font-sans selection:bg-indigo-600 selection:text-white overflow-hidden transition-colors duration-300",
-      appTheme === 'white' && "app-theme-white bg-slate-50 text-slate-900",
-      appTheme === 'dark' && "app-theme-dark bg-[#0b111e] text-slate-100"
+      appTheme === 'white' && "app-theme-white bg-white text-slate-900",
+      appTheme === 'dark' && "app-theme-dark bg-black text-slate-100"
     )}>
       {/* Network Status Toast */}
       <AnimatePresence>
@@ -410,37 +415,24 @@ export default function Layout({ children, activeView, onViewChange, userProfile
               <span className="hidden md:inline">{lang === 'bn' ? 'English' : 'বাংলা'}</span>
             </button>
 
-            {/* Premium 2-option background theme switch */}
-            <div className="flex items-center gap-1 bg-slate-100/60 dark:bg-slate-800/20 p-1 rounded-xl border border-slate-200/50 dark:border-slate-800/40">
-              <button
-                type="button"
-                onClick={() => setAppTheme('white')}
-                className={cn(
-                  "px-2.5 py-1 text-[11px] font-black tracking-tight rounded-lg transition-all flex items-center gap-1 cursor-pointer",
-                  appTheme === 'white' 
-                    ? "bg-white text-slate-900 shadow-sm border border-slate-200 ring-2 ring-slate-100" 
-                    : "text-slate-500 hover:text-slate-800"
-                )}
-                title={lang === 'bn' ? 'সাদা মোড' : 'White Theme'}
-              >
-                <div className="w-2 h-2 rounded-full bg-slate-200 border border-slate-350" />
-                <span className="hidden md:inline">{lang === 'bn' ? 'সাদা' : 'White'}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setAppTheme('dark')}
-                className={cn(
-                  "px-2.5 py-1 text-[11px] font-black tracking-tight rounded-lg transition-all flex items-center gap-1 cursor-pointer",
-                  appTheme === 'dark' 
-                    ? "bg-[#17243c] text-white shadow-sm border border-[#233454] ring-2 ring-indigo-500/10" 
-                    : "text-slate-400 hover:text-indigo-400"
-                )}
-                title={lang === 'bn' ? 'ডার্ক মোড' : 'Dark Theme'}
-              >
-                <div className="w-2 h-2 rounded-full bg-indigo-500 shadow-sm" />
-                <span className="hidden md:inline">{lang === 'bn' ? 'ডার্ক' : 'Dark'}</span>
-              </button>
-            </div>
+            {/* Premium background theme switch toggle */}
+            <button
+              type="button"
+              onClick={() => onAppThemeChange(appTheme === 'white' ? 'dark' : 'white')}
+              className={cn(
+                "px-3 py-1.5 text-xs font-black rounded-xl border transition-all flex items-center gap-2 cursor-pointer select-none",
+                appTheme === 'dark'
+                  ? "bg-slate-900 border-slate-800 text-white shadow-sm"
+                  : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
+              )}
+              title={lang === 'bn' ? 'ডার্ক মোড পরিবর্তন করুন' : 'Toggle Dark Mode'}
+            >
+              <div className={cn(
+                "w-2.5 h-2.5 rounded-full transition-all duration-300",
+                appTheme === 'dark' ? "bg-indigo-400 shadow-[0_0_8px_rgba(129,140,248,0.8)]" : "bg-slate-300"
+              )} />
+              <span>{lang === 'bn' ? 'ডার্ক' : 'Dark'}</span>
+            </button>
 
             <button 
               onClick={() => setIsCalculatorOpen(!isCalculatorOpen)}

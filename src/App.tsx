@@ -34,7 +34,12 @@ import Auth from './components/Auth';
 import SubscriptionGate from './components/SubscriptionGate';
 import Receipt from './components/Receipt';
 import GeminiAssistant from './components/GeminiAssistant';
-import { Product, Sale, View, SaleItem, ShopInfo, Customer, UserProfile } from './types';
+import { Product, Sale, View, SaleItem, ShopInfo, Customer, UserProfile, ServiceJob, RMA, Warehouse, WarehouseStock, WarehouseTransfer, SMSAlert, EMIDetails } from './types';
+import Servicing from './components/Servicing';
+import RMAManager from './components/RMA';
+import Warehouses from './components/Warehouses';
+import Commissions from './components/Commissions';
+import SmartSearch from './components/SmartSearch';
 import { Language, translations } from './translations';
 import { formatCurrency } from './lib/utils';
 import { AR_LOGO_BASE64 } from './components/Auth';
@@ -55,10 +60,31 @@ export default function App() {
   const isInvoiceQuery = urlParams.has('invoice');
 
   const [activeView, setActiveView] = useState<View>('dashboard');
+  const [appTheme, setAppTheme] = useState<'white' | 'dark'>(() => {
+    try {
+      const saved = localStorage.getItem('app_theme');
+      return saved === 'dark' ? 'dark' : 'white';
+    } catch {
+      return 'white';
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('app_theme', appTheme);
+    } catch {}
+  }, [appTheme]);
   const [lang, setLang] = useState<Language>('bn');
   const [products, setProducts] = useState<Product[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [serviceJobs, setServiceJobs] = useState<ServiceJob[]>([]);
+  const [rmas, setRmas] = useState<RMA[]>([]);
+  const [staff, setStaff] = useState<UserProfile[]>([]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [warehouseStocks, setWarehouseStocks] = useState<WarehouseStock[]>([]);
+  const [warehouseTransfers, setWarehouseTransfers] = useState<WarehouseTransfer[]>([]);
+  const [smsAlerts, setSmsAlerts] = useState<SMSAlert[]>([]);
   const [shopInfo, setShopInfo] = useState<ShopInfo>(DEFAULT_SHOP_INFO);
   const [lastSale, setLastSale] = useState<Sale | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -243,6 +269,9 @@ export default function App() {
           setProfileLoading(false);
         }
       }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, `users/${user.uid}`);
+      setProfileLoading(false);
     });
 
     return () => unsub();
@@ -280,6 +309,8 @@ export default function App() {
       if (doc.exists()) {
         setShopInfo(doc.data() as ShopInfo);
       }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, `shops/${userProfile.shopId}`);
     });
   }, [userProfile?.shopId]);
 
@@ -290,6 +321,8 @@ export default function App() {
     return onSnapshot(q, (snapshot) => {
       const pData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
       setProducts(pData);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'products');
     });
   }, [userProfile?.shopId]);
 
@@ -304,6 +337,8 @@ export default function App() {
     return onSnapshot(q, (snapshot) => {
       const sData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Sale));
       setSales(sData);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'sales');
     });
   }, [userProfile?.shopId]);
 
@@ -314,6 +349,118 @@ export default function App() {
     return onSnapshot(q, (snapshot) => {
       const cData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Customer));
       setCustomers(cData);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'customers');
+    });
+  }, [userProfile?.shopId]);
+
+  // Listen to Service Jobs
+  useEffect(() => {
+    if (!userProfile?.shopId) return;
+    const q = query(
+      collection(db, 'service_jobs'), 
+      where('shopId', '==', userProfile.shopId),
+      orderBy('createdAt', 'desc')
+    );
+    return onSnapshot(q, (snapshot) => {
+      const svData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ServiceJob));
+      setServiceJobs(svData);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'service_jobs');
+    });
+  }, [userProfile?.shopId]);
+
+  // Listen to RMA
+  useEffect(() => {
+    if (!userProfile?.shopId) return;
+    const q = query(
+      collection(db, 'rma'), 
+      where('shopId', '==', userProfile.shopId),
+      orderBy('warrantyDate', 'desc')
+    );
+    return onSnapshot(q, (snapshot) => {
+      const rData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as RMA));
+      setRmas(rData);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'rma');
+    });
+  }, [userProfile?.shopId]);
+
+  // Listen to Staff (Users collection)
+  useEffect(() => {
+    if (!userProfile?.shopId) return;
+    const q = query(
+      collection(db, 'users'), 
+      where('shopId', '==', userProfile.shopId)
+    );
+    return onSnapshot(q, (snapshot) => {
+      const sData = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
+      setStaff(sData);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'users');
+    });
+  }, [userProfile?.shopId]);
+
+  // Listen to Warehouses
+  useEffect(() => {
+    if (!userProfile?.shopId) return;
+    const q = query(
+      collection(db, 'warehouses'), 
+      where('shopId', '==', userProfile.shopId)
+    );
+    return onSnapshot(q, (snapshot) => {
+      const wData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Warehouse));
+      wData.sort((a, b) => b.createdAt - a.createdAt);
+      setWarehouses(wData);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'warehouses');
+    });
+  }, [userProfile?.shopId]);
+
+  // Listen to Warehouse Stocks
+  useEffect(() => {
+    if (!userProfile?.shopId) return;
+    const q = query(
+      collection(db, 'warehouse_stocks'), 
+      where('shopId', '==', userProfile.shopId)
+    );
+    return onSnapshot(q, (snapshot) => {
+      const wsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WarehouseStock));
+      setWarehouseStocks(wsData);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'warehouse_stocks');
+    });
+  }, [userProfile?.shopId]);
+
+  // Listen to Warehouse Transfers
+  useEffect(() => {
+    if (!userProfile?.shopId) return;
+    const q = query(
+      collection(db, 'warehouse_transfers'), 
+      where('shopId', '==', userProfile.shopId)
+    );
+    return onSnapshot(q, (snapshot) => {
+      const wtData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WarehouseTransfer));
+      wtData.sort((a, b) => b.timestamp - a.timestamp);
+      setWarehouseTransfers(wtData);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'warehouse_transfers');
+    });
+  }, [userProfile?.shopId]);
+
+  // Listen to SMS Alerts
+  useEffect(() => {
+    if (!userProfile?.shopId) return;
+    const q = query(
+      collection(db, 'sms_alerts'), 
+      where('shopId', '==', userProfile.shopId)
+    );
+    return onSnapshot(q, (snapshot) => {
+      const smsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SMSAlert));
+      smsData.sort((a, b) => b.timestamp - a.timestamp);
+      setSmsAlerts(smsData);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'sms_alerts');
     });
   }, [userProfile?.shopId]);
 
@@ -440,6 +587,76 @@ export default function App() {
     }
   };
 
+  // Service Jobs CRUD handlers
+  const handleAddServiceJob = async (newJob: Omit<ServiceJob, 'id' | 'shopId' | 'createdAt'>) => {
+    if (!userProfile) return;
+    try {
+      await addDoc(collection(db, 'service_jobs'), {
+        ...newJob,
+        shopId: userProfile.shopId,
+        createdAt: Date.now()
+      });
+      showToast(lang === 'bn' ? 'সার্ভিসিং জব সফলভাবে যোগ করা হয়েছে' : 'Service job added successfully', 'success');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'service_jobs');
+    }
+  };
+
+  const handleUpdateServiceJob = async (id: string, updates: Partial<ServiceJob>) => {
+    if (!userProfile) return;
+    try {
+      await updateDoc(doc(db, 'service_jobs', id), updates);
+      showToast(lang === 'bn' ? 'সার্ভিসিং জব আপডেট করা হয়েছে' : 'Service job updated successfully', 'success');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `service_jobs/${id}`);
+    }
+  };
+
+  const handleDeleteServiceJob = async (id: string) => {
+    if (!userProfile) return;
+    try {
+      await deleteDoc(doc(db, 'service_jobs', id));
+      showToast(lang === 'bn' ? 'সার্ভিসিং জব মুছে ফেলা হয়েছে' : 'Service job removed', 'info');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `service_jobs/${id}`);
+    }
+  };
+
+  // RMA (Return Merchandise Authorization) CRUD handlers
+  const handleAddRma = async (newRma: Omit<RMA, 'id' | 'shopId' | 'warrantyDate'>) => {
+    if (!userProfile) return;
+    try {
+      await addDoc(collection(db, 'rma'), {
+        ...newRma,
+        shopId: userProfile.shopId,
+        warrantyDate: Date.now()
+      });
+      showToast(lang === 'bn' ? 'নতুন ওয়ারেন্টি RMA ট্র্যাকার যোগ করা হয়েছে' : 'Warranty RMA tracker initialized successfully', 'success');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'rma');
+    }
+  };
+
+  const handleUpdateRma = async (id: string, updates: Partial<RMA>) => {
+    if (!userProfile) return;
+    try {
+      await updateDoc(doc(db, 'rma', id), updates);
+      showToast(lang === 'bn' ? 'RMA ওয়ারেন্টি তথ্য আপডেট করা হয়েছে' : 'RMA warranty claim successfully updated', 'success');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `rma/${id}`);
+    }
+  };
+
+  const handleDeleteRma = async (id: string) => {
+    if (!userProfile) return;
+    try {
+      await deleteDoc(doc(db, 'rma', id));
+      showToast(lang === 'bn' ? 'RMA ওয়ারেন্টি ডিলিট করা হয়েছে' : 'RMA warranty claim deleted', 'info');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `rma/${id}`);
+    }
+  };
+
   const handleUpdateShopInfo = async (info: ShopInfo) => {
     if (!userProfile || userProfile.role !== 'owner') return;
     try {
@@ -463,6 +680,11 @@ export default function App() {
       receiptSentType?: 'sms' | 'email';
       receiptSentValue?: string;
       offline?: boolean;
+      isEMI?: boolean;
+      emiDetails?: EMIDetails;
+      salesmanId?: string;
+      salesmanName?: string;
+      commissionAmount?: number;
     }
   ) => {
     if (!userProfile) return;
@@ -472,6 +694,11 @@ export default function App() {
     // Sanitize items - remove undefined fields (like warranty)
     const sanitizedItems = items.map(item => JSON.parse(JSON.stringify(item)));
 
+    const isEmiTx = !!paymentDetails?.isEMI;
+    const emiDetails = paymentDetails?.emiDetails;
+    const dueAmount = isEmiTx && emiDetails ? Math.max(0, payableAmount - emiDetails.downPayment) : 0;
+    const paymentStatus = isEmiTx ? 'partially_paid' : 'paid';
+
     // Create Sale record
     const saleData = {
       timestamp: Date.now(),
@@ -479,6 +706,8 @@ export default function App() {
       totalAmount,
       discount,
       payableAmount,
+      dueAmount,
+      paymentStatus,
       customerName: customerInfo?.name || '',
       customerPhone: customerInfo?.phone || '',
       customerAddress: customerInfo?.address || '',
@@ -493,7 +722,12 @@ export default function App() {
       digitalReceiptSent: paymentDetails?.digitalReceiptSent || false,
       receiptSentType: paymentDetails?.receiptSentType || '',
       receiptSentValue: paymentDetails?.receiptSentValue || '',
-      offline: paymentDetails?.offline || false
+      offline: paymentDetails?.offline || false,
+      isEMI: isEmiTx,
+      emiDetails: isEmiTx ? emiDetails : null,
+      salesmanId: paymentDetails?.salesmanId || '',
+      salesmanName: paymentDetails?.salesmanName || '',
+      commissionAmount: paymentDetails?.commissionAmount || 0
     };
 
     let completedSale: Sale | undefined;
@@ -534,7 +768,8 @@ export default function App() {
               lastPurchaseDate: Date.now(),
               address: customerInfo.address || existingCustomer.address,
               name: customerInfo.name || existingCustomer.name,
-              points: increment(pointsDelta)
+              points: increment(pointsDelta),
+              totalDue: increment(dueAmount)
             });
          } catch (error) {
             handleFirestoreError(error, OperationType.WRITE, `sales-completion-update-customer-${existingCustomer.id}`);
@@ -549,7 +784,8 @@ export default function App() {
               totalSales: payableAmount,
               lastPurchaseDate: Date.now(),
               shopId: userProfile.shopId,
-              points: earnedPoints
+              points: earnedPoints,
+              totalDue: dueAmount
             });
           } catch (error) {
             handleFirestoreError(error, OperationType.WRITE, 'sales-completion-create-customer');
@@ -1198,6 +1434,8 @@ export default function App() {
         shopInfo={shopInfo}
         onUpdateShopInfo={handleUpdateShopInfo}
         onUpgradeClick={() => setShowUpgradeModal(true)}
+        appTheme={appTheme}
+        onAppThemeChange={setAppTheme}
       >
         {activeView === 'dashboard' && <Dashboard products={products} sales={sales} lang={lang} />}
         {activeView === 'pos' && (
@@ -1207,6 +1445,8 @@ export default function App() {
             shopInfo={shopInfo}
             onCompleteSale={handleCompleteSale} 
             lang={lang}
+            staff={staff}
+            appTheme={appTheme}
           />
         )}
         {activeView === 'inventory' && (
@@ -1249,6 +1489,52 @@ export default function App() {
         )}
         {activeView === 'staff' && userProfile && (
            <StaffManagement userProfile={userProfile} lang={lang} />
+        )}
+        {activeView === 'servicing' && (
+           <Servicing 
+            jobs={serviceJobs}
+            onAddJob={handleAddServiceJob}
+            onUpdateJob={handleUpdateServiceJob}
+            onDeleteJob={handleDeleteServiceJob}
+            lang={lang}
+           />
+        )}
+        {activeView === 'rma' && (
+           <RMAManager 
+            rmas={rmas}
+            onAddRma={handleAddRma}
+            onUpdateRma={handleUpdateRma}
+            onDeleteRma={handleDeleteRma}
+            lang={lang}
+           />
+        )}
+        {activeView === 'warehouses' && (
+          <Warehouses 
+            products={products}
+            warehouses={warehouses}
+            warehouseStocks={warehouseStocks}
+            warehouseTransfers={warehouseTransfers}
+            showToast={showToast}
+            lang={lang}
+            userProfile={userProfile!}
+          />
+        )}
+        {activeView === 'commissions' && (
+          <Commissions 
+            sales={sales}
+            staff={staff}
+            showToast={showToast}
+            lang={lang}
+            userProfile={userProfile!}
+          />
+        )}
+        {activeView === 'smartsearch' && (
+          <SmartSearch 
+            sales={sales}
+            serviceJobs={serviceJobs}
+            rmas={rmas}
+            lang={lang}
+          />
         )}
       </Layout>
 

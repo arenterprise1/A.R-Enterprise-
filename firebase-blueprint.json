@@ -78,6 +78,108 @@
         "invitedBy": { "type": "string" }
       },
       "required": ["role", "shopId", "invitedBy"]
+    },
+    "ServiceJob": {
+      "title": "ServiceJob",
+      "description": "Servicing/Repair Job",
+      "type": "object",
+      "properties": {
+        "shopId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "customerPhone": { "type": "string" },
+        "deviceName": { "type": "string" },
+        "serialOrImei": { "type": "string" },
+        "problemDescription": { "type": "string" },
+        "repairCost": { "type": "number" },
+        "advancePaid": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "repairing", "fixed", "delivered", "cancelled"] },
+        "technicianNotes": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "promisedDate": { "type": "number" }
+      },
+      "required": ["shopId", "customerName", "customerPhone", "deviceName", "problemDescription", "repairCost", "advancePaid", "status", "createdAt"]
+    },
+    "RMA": {
+      "title": "RMA",
+      "description": "Warranty replacement/RMA log",
+      "type": "object",
+      "properties": {
+        "shopId": { "type": "string" },
+        "productName": { "type": "string" },
+        "serialOrImei": { "type": "string" },
+        "supplierName": { "type": "string" },
+        "status": { "type": "string", "enum": ["sent_to_supplier", "received_from_supplier", "delivered_to_customer"] },
+        "warrantyDate": { "type": "number" },
+        "returnDate": { "type": "number" },
+        "notes": { "type": "string" }
+      },
+      "required": ["shopId", "productName", "serialOrImei", "supplierName", "status", "warrantyDate"]
+    },
+    "Warehouse": {
+      "title": "Warehouse",
+      "description": "Go-down definitions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "address": { "type": "string" },
+        "phone": { "type": "string" },
+        "shopId": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "name", "shopId", "createdAt"]
+    },
+    "WarehouseStock": {
+      "title": "WarehouseStock",
+      "description": "Stock levels in warehouses",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "warehouseId": { "type": "string" },
+        "warehouseName": { "type": "string" },
+        "productId": { "type": "string" },
+        "productName": { "type": "string" },
+        "category": { "type": "string" },
+        "brand": { "type": "string" },
+        "stock": { "type": "number" },
+        "shopId": { "type": "string" }
+      },
+      "required": ["id", "warehouseId", "warehouseName", "productId", "productName", "category", "stock", "shopId"]
+    },
+    "WarehouseTransfer": {
+      "title": "WarehouseTransfer",
+      "description": "Stock Transfer log between showrooms/go-downs",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "productId": { "type": "string" },
+        "productName": { "type": "string" },
+        "sourceWarehouseId": { "type": "string" },
+        "sourceWarehouseName": { "type": "string" },
+        "destWarehouseId": { "type": "string" },
+        "destWarehouseName": { "type": "string" },
+        "quantity": { "type": "number" },
+        "timestamp": { "type": "number" },
+        "shopId": { "type": "string" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["id", "productId", "productName", "sourceWarehouseId", "sourceWarehouseName", "destWarehouseId", "destWarehouseName", "quantity", "timestamp", "shopId", "createdBy"]
+    },
+    "SMSAlert": {
+      "title": "SMSAlert",
+      "description": "Outbound/scheduled automatic SMS log tracer",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "shopId": { "type": "string" },
+        "customerPhone": { "type": "string" },
+        "customerName": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string", "enum": ["emi_reminder", "repair_pickup", "custom"] },
+        "status": { "type": "string", "enum": ["sent", "pending", "failed"] },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["shopId", "customerPhone", "customerName", "message", "type", "status", "timestamp"]
     }
   },
   "firestore": {
@@ -100,6 +202,30 @@
     "/customers/{customerId}": {
       "schema": "Customer",
       "description": "Customer management collection"
+    },
+    "/service_jobs/{jobId}": {
+      "schema": "ServiceJob",
+      "description": "Repairs/Servicing jobs collection"
+    },
+    "/rma/{rmaId}": {
+      "schema": "RMA",
+      "description": "Supplier warranty claims (RMA) tracking collection"
+    },
+    "/warehouses/{warehouseId}": {
+      "schema": "Warehouse",
+      "description": "Go-downs listing"
+    },
+    "/warehouse_stocks/{stockId}": {
+      "schema": "WarehouseStock",
+      "description": "Product stocks inside specific go-downs"
+    },
+    "/warehouse_transfers/{transferId}": {
+      "schema": "WarehouseTransfer",
+      "description": "Warehouse stock transfers auditing logs"
+    },
+    "/sms_alerts/{alertId}": {
+      "schema": "SMSAlert",
+      "description": "Outbound and automatic SMS alert notifications history"
     }
   }
 }

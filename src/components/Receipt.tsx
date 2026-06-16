@@ -379,6 +379,11 @@ export default function Receipt({ sale, shopInfo, onClose, lang }: ReceiptProps)
                               {item.warranty && (
                                 <p className="text-[10px] font-black text-slate-500 mt-1 italic tracking-tight">{t.warranty}: {item.warranty}</p>
                               )}
+                              {item.serialNumbers && item.serialNumbers.filter(Boolean).length > 0 && (
+                                <p className="text-[10px] font-black text-indigo-600 mt-1 italic tracking-tight">
+                                  ⚙️ {lang === 'bn' ? 'সিরিয়াল/IMEI:' : 'Serial/IMEI:'} {item.serialNumbers.filter(Boolean).join(', ')}
+                                </p>
+                              )}
                             </td>
                             <td className="px-4 py-3 text-center font-black text-black text-base border-r-2" style={{ borderColor: `${accentColor}20` }}>{item.quantity}</td>
                             <td className="px-6 py-3 text-right font-black text-black border-r-2" style={{ borderColor: `${accentColor}20` }}>{formatCurrency(rate)}</td>
@@ -476,6 +481,47 @@ export default function Receipt({ sale, shopInfo, onClose, lang }: ReceiptProps)
                     )}
                   </div>
                 </div>
+
+                {/* EMI Installments Contract Sheet */}
+                {sale.isEMI && sale.emiDetails && (
+                  <div className="mb-8 p-5 rounded-3xl border-2 bg-indigo-50/20 text-left space-y-3" style={{ borderColor: `${accentColor}50` }}>
+                    <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: `${accentColor}25` }}>
+                      <h4 className="font-sans font-black text-indigo-950 text-xs uppercase tracking-widest flex items-center gap-1.5">
+                        💳 {lang === 'bn' ? 'কিস্তি চুক্তির বিবরণ (EMI Contract Summary)' : 'Installment Agreement (EMI Details)'}
+                      </h4>
+                      <span className="bg-indigo-600 text-white text-[9px] px-2.5 py-1 rounded-full font-black uppercase tracking-wider">
+                        Active Plan
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs font-semibold leading-relaxed text-slate-700">
+                      <div>
+                        <p className="text-[10px] text-slate-400 uppercase font-black">{lang === 'bn' ? 'ডাউন পেমেন্ট' : 'Down Payment'}</p>
+                        <p className="font-sans font-black text-sm text-slate-900">{formatCurrency(sale.emiDetails.downPayment)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-400 uppercase font-black">{lang === 'bn' ? 'কিস্তির সংখ্যা' : 'Installment Count'}</p>
+                        <p className="font-black text-sm text-slate-900">{sale.emiDetails.totalInstallments} {lang === 'bn' ? 'টি কিস্তি' : 'Installments'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-indigo-700 uppercase font-black">{lang === 'bn' ? 'প্রতি কিস্তির পরিমাণ' : 'Installment Fee'}</p>
+                        <p className="font-sans font-black text-sm text-indigo-700">{formatCurrency(sale.emiDetails.installmentAmount)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-400 uppercase font-black">{lang === 'bn' ? 'কিস্তির ব্যবধান' : 'Billing Interval'}</p>
+                        <p className="font-black text-sm text-slate-900 uppercase">{sale.emiDetails.installmentInterval === 'monthly' ? (lang === 'bn' ? 'মাসিক কিস্তি' : 'Monthly') : (lang === 'bn' ? 'সাপ্তাহিক কিস্তি' : 'Weekly')}</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col sm:flex-row items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-dashed" style={{ borderColor: `${accentColor}20` }}>
+                      <p className="font-bold">
+                        {lang === 'bn' ? '* প্রতিটি কিস্তির জন্য ৩ কার্যদিবসের অতিরিক্ত সময় প্রদান করা হবে।' : '* Grace period of 3 business days applies on installment due dates.'}
+                      </p>
+                      <p className="font-black text-slate-800">
+                        {lang === 'bn' ? 'প্রথম কিস্তির সম্ভাব্য তারিখ: ' : 'First Installment Due: '}
+                        <span className="font-sans font-extrabold">{new Date(sale.emiDetails.nextInstallmentDate).toLocaleDateString(lang === 'bn' ? 'bn-BD' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 {/* Footer & Signature Section */}
                 <div className="mt-16 pt-8 grid grid-cols-2 gap-6 sm:gap-20">
@@ -579,6 +625,9 @@ export default function Receipt({ sale, shopInfo, onClose, lang }: ReceiptProps)
                       <td className="py-1.5 text-left">
                         <span className="font-black uppercase block leading-tight">{item.productName}</span>
                         {item.warranty && <span className="block text-[8px] text-slate-500 italic mt-0.5">({t.warranty}: {item.warranty})</span>}
+                        {item.serialNumbers && item.serialNumbers.filter(Boolean).length > 0 && (
+                          <span className="block text-[8px] text-indigo-600 font-bold mt-0.5">({lang === 'bn' ? 'সিরিয়াল' : 'SN'}: {item.serialNumbers.filter(Boolean).join(', ')})</span>
+                        )}
                       </td>
                       <td className="py-1.5 text-center font-bold">{item.quantity}</td>
                       <td className="py-1.5 text-right font-black">{formatCurrency(item.total)}</td>
@@ -636,6 +685,24 @@ export default function Receipt({ sale, shopInfo, onClose, lang }: ReceiptProps)
                   <span>{sale.offline ? 'OFFLINE LOCAL' : 'CLOUD SYNCED'}</span>
                 </div>
               </div>
+
+              {sale.isEMI && sale.emiDetails && (
+                <div className="border-t border-dashed border-black/35 pt-1.5 mt-2 space-y-0.5 text-left text-[9px] font-mono">
+                  <p className="text-center font-black">*** EMI AGREEMENT ***</p>
+                  <div className="flex justify-between">
+                    <span>DOWN PAYMENT:</span>
+                    <span className="font-bold">{formatCurrency(sale.emiDetails.downPayment)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>INSTALLMENT TERMS:</span>
+                    <span className="font-bold">{sale.emiDetails.totalInstallments} Terms ({sale.emiDetails.installmentInterval.toUpperCase()})</span>
+                  </div>
+                  <div className="flex justify-between text-indigo-600">
+                    <span>PER INSTALLMENT:</span>
+                    <span className="font-bold">{formatCurrency(sale.emiDetails.installmentAmount)}</span>
+                  </div>
+                </div>
+              )}
 
               <div className="border-b border-dashed border-black/45 my-2.5" />
 

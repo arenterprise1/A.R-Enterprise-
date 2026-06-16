@@ -16,11 +16,11 @@ service cloud.firestore {
     }
 
     function getShopId() {
-      return getUserData().shopId;
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.shopId : request.auth.uid;
     }
 
     function getUserRole() {
-      return getUserData().role;
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid)) ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role : 'owner';
     }
 
     // Role checks
@@ -143,6 +143,137 @@ service cloud.firestore {
     match /shops/{shopId} {
       allow get: if true; // Public access for client display QR Code
       allow write: if isOwner() && getShopId() == shopId;
+    }
+
+    // 7. Service Jobs (Repair / Maintenance)
+    function isValidServiceJob(data) {
+      return data.keys().hasAll(['shopId', 'customerName', 'customerPhone', 'deviceName', 'problemDescription', 'repairCost', 'advancePaid', 'status', 'createdAt'])
+        && data.keys().size() >= 9 && data.keys().size() <= 15
+        && data.shopId == getShopId()
+        && data.customerName is string && data.customerName.size() <= 100
+        && data.customerPhone is string && data.customerPhone.size() <= 50
+        && data.deviceName is string && data.deviceName.size() <= 100
+        && data.problemDescription is string && data.problemDescription.size() <= 1000
+        && data.repairCost is number && data.repairCost >= 0
+        && data.advancePaid is number && data.advancePaid >= 0
+        && data.status is string && (data.status == 'pending' || data.status == 'repairing' || data.status == 'fixed' || data.status == 'delivered' || data.status == 'cancelled')
+        && data.createdAt is number
+        && (!data.keys().hasAny(['serialOrImei']) || (data.serialOrImei is string && data.serialOrImei.size() <= 100))
+        && (!data.keys().hasAny(['technicianNotes']) || (data.technicianNotes is string && data.technicianNotes.size() <= 2000))
+        && (!data.keys().hasAny(['promisedDate']) || (data.promisedDate is number));
+    }
+
+    match /service_jobs/{jobId} {
+      allow list: if isSignedIn() && resource.data.shopId == getShopId();
+      allow get: if isStaffMember(resource.data.shopId);
+      
+      allow create: if isAnyStaff()
+        && isValidId(jobId)
+        && isValidServiceJob(incoming());
+        
+      allow update: if isAnyStaff()
+        && isStaffMember(existing().shopId)
+        && isValidServiceJob(incoming())
+        && incoming().shopId == existing().shopId;
+        
+      allow delete: if isOwner() && isStaffMember(existing().shopId);
+    }
+
+    // 8. RMA (Supplier warranties)
+    function isValidRMA(data) {
+      return data.keys().hasAll(['shopId', 'productName', 'serialOrImei', 'supplierName', 'status', 'warrantyDate'])
+        && data.keys().size() >= 6 && data.keys().size() <= 10
+        && data.shopId == getShopId()
+        && data.productName is string && data.productName.size() <= 200
+        && data.serialOrImei is string && data.serialOrImei.size() <= 100
+        && data.supplierName is string && data.supplierName.size() <= 200
+        && data.status is string && (data.status == 'sent_to_supplier' || data.status == 'received_from_supplier' || data.status == 'delivered_to_customer')
+        && data.warrantyDate is number
+        && (!data.keys().hasAny(['returnDate']) || (data.returnDate is number))
+        && (!data.keys().hasAny(['notes']) || (data.notes is string && data.notes.size() <= 2000));
+    }
+
+    match /rma/{rmaId} {
+      allow list: if isSignedIn() && resource.data.shopId == getShopId();
+      allow get: if isStaffMember(resource.data.shopId);
+      
+      allow create: if isAnyStaff()
+        && isValidId(rmaId)
+        && isValidRMA(incoming());
+        
+      allow update: if isAnyStaff()
+        && isStaffMember(existing().shopId)
+        && isValidRMA(incoming())
+        && incoming().shopId == existing().shopId;
+        
+      allow delete: if isOwner() && isStaffMember(existing().shopId);
+    }
+
+    // 9. Warehouses
+    function isValidWarehouse(data) {
+      return data.keys().hasAll(['id', 'name', 'shopId', 'createdAt'])
+        && data.keys().size() >= 4 && data.keys().size() <= 6
+        && data.shopId == getShopId()
+        && data.id is string
+        && data.name is string && data.name.size() <= 100
+        && data.createdAt is number
+        && (!data.keys().hasAny(['address']) || data.address is string)
+        && (!data.keys().hasAny(['phone']) || data.phone is string);
+    }
+
+    match /warehouses/{warehouseId} {
+      allow list: if isSignedIn() && resource.data.shopId == getShopId();
+      allow get: if isSignedIn() && resource.data.shopId == getShopId();
+      allow write: if isAnyStaff() && isValidWarehouse(incoming());
+    }
+
+    // 10. Warehouse stocks
+    function isValidWarehouseStock(data) {
+      return data.keys().hasAll(['id', 'warehouseId', 'warehouseName', 'productId', 'productName', 'category', 'stock', 'shopId'])
+        && data.shopId == getShopId()
+        && data.stock is number
+        && data.warehouseId is string
+        && data.productId is string;
+    }
+
+    match /warehouse_stocks/{stockId} {
+      allow list: if isSignedIn() && resource.data.shopId == getShopId();
+      allow get: if isSignedIn() && resource.data.shopId == getShopId();
+      allow write: if isAnyStaff() && isValidWarehouseStock(incoming());
+    }
+
+    // 11. Warehouse transfers
+    function isValidWarehouseTransfer(data) {
+      return data.keys().hasAll(['id', 'productId', 'productName', 'sourceWarehouseId', 'sourceWarehouseName', 'destWarehouseId', 'destWarehouseName', 'quantity', 'timestamp', 'shopId', 'createdBy'])
+        && data.shopId == getShopId()
+        && data.quantity is number && data.quantity > 0
+        && data.timestamp is number;
+    }
+
+    match /warehouse_transfers/{transferId} {
+      allow list: if isSignedIn() && resource.data.shopId == getShopId();
+      allow get: if isSignedIn() && resource.data.shopId == getShopId();
+      allow create: if isAnyStaff() && isValidWarehouseTransfer(incoming());
+    }
+
+    // 12. SMS Alerts
+    function isValidSMSAlert(data) {
+      return data.keys().hasAll(['shopId', 'customerPhone', 'customerName', 'message', 'type', 'status', 'timestamp'])
+        && data.shopId == getShopId()
+        && data.customerPhone is string
+        && data.customerName is string
+        && data.message is string
+        && data.type is string
+        && data.status is string
+        && data.timestamp is number;
+    }
+
+    match /sms_alerts/{alertId} {
+      allow list: if isSignedIn() && resource.data.shopId == getShopId();
+      allow get: if isSignedIn() && resource.data.shopId == getShopId();
+      allow create: if isAnyStaff() && isValidSMSAlert(incoming());
+      allow update: if isAnyStaff() && isValidSMSAlert(incoming());
+      allow delete: if isOwner();
     }
   }
 }
