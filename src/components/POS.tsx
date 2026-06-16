@@ -93,6 +93,20 @@ export default function POS({ products, customers, shopInfo, onCompleteSale, lan
   const [cart, setCart] = useState<SaleItem[]>([]);
   const [showCustomerForm, setShowCustomerForm] = useState(false);
   const [customerSearch, setCustomerSearch] = useState('');
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
+
+  const showLocalToast = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
+    setToast({ message, type });
+  };
+
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => {
+        setToast(null);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
   
   // Barcode search simulation
   const [barcodeInput, setBarcodeInput] = useState('');
@@ -126,13 +140,33 @@ export default function POS({ products, customers, shopInfo, onCompleteSale, lan
     setCart(prev => {
       const existing = prev.find(item => item.productId === product.id);
       if (existing) {
-        if (existing.quantity >= product.stock) return prev;
+        if (existing.quantity >= product.stock) {
+          showLocalToast(
+            lang === 'bn' 
+              ? `দুঃখিত, "${product.name}" এর পর্যাপ্ত স্টক নেই!` 
+              : `Sorry, insufficient stock for "${product.name}"!`,
+            'error'
+          );
+          return prev;
+        }
+        showLocalToast(
+          lang === 'bn' 
+            ? `"${product.name}" এর পরিমাণ বৃদ্ধি করা হয়েছে` 
+            : `Increased quantity for "${product.name}"`,
+          'success'
+        );
         return prev.map(item => 
           item.productId === product.id 
             ? { ...item, quantity: item.quantity + 1, total: (item.quantity + 1) * item.price }
             : item
         );
       }
+      showLocalToast(
+        lang === 'bn' 
+          ? `"${product.name}" কার্টে যুক্ত করা হয়েছে` 
+          : `Added "${product.name}" to cart!`,
+        'success'
+      );
       return [...prev, {
         id: Math.random().toString(36).substr(2, 9),
         productId: product.id,
@@ -310,6 +344,12 @@ export default function POS({ products, customers, shopInfo, onCompleteSale, lan
 
     if (sale) {
       setCompletedSale(sale);
+      showLocalToast(
+        lang === 'bn' 
+          ? 'বিক্রয় সফলভাবে সম্পন্ন হয়েছে! ইনভয়েস প্রস্তুত।' 
+          : 'Sale completed successfully! Invoice ready.',
+        'success'
+      );
       setCart([]);
       setDiscountVal(0);
       setAppliedPromo(null);
@@ -367,7 +407,24 @@ export default function POS({ products, customers, shopInfo, onCompleteSale, lan
   }[posTheme];
 
   return (
-    <div className="flex flex-col gap-4 h-full min-h-0">
+    <div className="flex flex-col gap-4 h-full min-h-0 relative">
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: -50, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            className="fixed top-24 left-1/2 -translate-x-1/2 z-[150] flex items-center gap-3 px-5 py-3.5 bg-slate-900 border border-slate-800 text-white rounded-2xl shadow-2xl max-w-sm w-max"
+          >
+            <div className="w-5 h-5 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400 shrink-0">
+              <CheckCircle2 size={13} />
+            </div>
+            <p className="text-xs font-bold leading-tight tracking-wide">{toast.message}</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Mobile View Tab Switcher */}
       <div className="flex lg:hidden bg-slate-150/40 dark:bg-slate-800/20 p-1 rounded-2xl border border-slate-200/50 dark:border-slate-800/40 sticky top-0 z-20 shadow-sm shrink-0">
         <button
@@ -636,12 +693,12 @@ export default function POS({ products, customers, shopInfo, onCompleteSale, lan
                     onClick={() => addToCart(product)}
                     whileTap={{ scale: 0.99 }}
                     className={cn(
-                      "group text-left flex flex-row items-center p-3 rounded-2xl transition-all border duration-200 gap-4 cursor-pointer",
+                      "group text-left flex flex-row items-center p-4 sm:p-5 rounded-3xl transition-all border duration-250 gap-4 cursor-pointer",
                       theme.card
                     )}
                   >
                     {/* Rectangle Thumbnail on Left */}
-                    <div className="w-16 h-16 sm:w-20 sm:h-20 shrink-0 bg-slate-100/50 flex items-center justify-center text-slate-300 overflow-hidden relative rounded-xl border border-slate-200/20">
+                    <div className="w-20 h-20 sm:w-24 sm:h-24 shrink-0 bg-slate-100/50 flex items-center justify-center text-slate-300 overflow-hidden relative rounded-2xl border border-slate-200/20">
                       {product.imageUrl ? (
                         <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
                       ) : (
@@ -650,10 +707,10 @@ export default function POS({ products, customers, shopInfo, onCompleteSale, lan
                     </div>
 
                     {/* Product Metadata Right Section */}
-                    <div className="flex-1 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex-1 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div className="space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h4 className={cn("font-bold transition-all text-base leading-tight", theme.cardText)}>{product.name}</h4>
+                          <h4 className={cn("font-black transition-all text-base sm:text-lg leading-tight", theme.cardText)}>{product.name}</h4>
                           <span className={cn("px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-tight", theme.categoryBadge)}>
                             {product.category || t.uncategorized}
                           </span>
@@ -662,9 +719,9 @@ export default function POS({ products, customers, shopInfo, onCompleteSale, lan
                       </div>
 
                       <div className="flex items-center gap-5 shrink-0 justify-between sm:justify-end">
-                        <span className={cn("text-lg font-black", theme.price)}>{formatCurrency(product.price)}</span>
+                        <span className={cn("text-lg sm:text-xl font-black font-sans leading-none", theme.price)}>{formatCurrency(product.price)}</span>
                         <div>
-                          <span className={cn("block text-[11px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap", theme.stock)}>
+                          <span className={cn("block text-[11px] font-black px-2.5 py-1 rounded-full border whitespace-nowrap", theme.stock)}>
                             {t.stock}: {product.stock}
                           </span>
                         </div>
@@ -681,29 +738,29 @@ export default function POS({ products, customers, shopInfo, onCompleteSale, lan
                   onClick={() => addToCart(product)}
                   whileTap={{ scale: 0.98 }}
                   className={cn(
-                    "group text-left flex flex-col hover:-translate-y-1 transition-all border rounded-3xl overflow-hidden cursor-pointer",
+                    "group text-left flex flex-col hover:-translate-y-1.5 hover:shadow-lg transition-all border rounded-3xl overflow-hidden cursor-pointer duration-300",
                     theme.card
                   )}
                 >
-                  <div className="h-40 bg-slate-100/30 flex items-center justify-center text-slate-300 overflow-hidden relative border-b border-slate-100/10">
+                  <div className="h-52 bg-slate-100/30 flex items-center justify-center text-slate-300 overflow-hidden relative border-b border-slate-100/10">
                     {product.imageUrl ? (
                       <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
                     ) : (
-                      <Package size={48} className="opacity-20 text-slate-400" />
+                      <Package size={52} className="opacity-20 text-slate-400" />
                     )}
-                    <div className="absolute top-3 left-3 px-2 py-1 bg-white/90 backdrop-blur-sm text-slate-800 rounded-lg text-[10px] font-bold uppercase tracking-tight shadow-sm border border-slate-200">
+                    <div className="absolute top-3 left-3 px-2 py-1 bg-white/95 backdrop-blur-sm text-slate-800 rounded-lg text-[10px] font-bold uppercase tracking-tight shadow-sm border border-slate-200">
                       {product.category || t.uncategorized}
                     </div>
                   </div>
-                  <div className="p-5 flex flex-col justify-between flex-1">
+                  <div className="p-6 flex flex-col justify-between flex-1 gap-4">
                     <div>
-                      <h4 className={cn("font-bold transition-all text-base line-clamp-1", theme.cardText)}>{product.name}</h4>
-                      <p className={cn("text-[10px] font-medium mt-1 uppercase", theme.cardSec)}>{t.code}: #{product.id.slice(0, 8).toUpperCase()}</p>
+                      <h4 className={cn("font-black transition-all text-lg leading-snug line-clamp-2 h-12", theme.cardText)}>{product.name}</h4>
+                      <p className={cn("text-[10px] font-medium uppercase tracking-wider", theme.cardSec)}>{t.code}: #{product.id.slice(0, 8).toUpperCase()}</p>
                     </div>
-                    <div className="mt-5 flex items-end justify-between">
-                      <span className={cn("text-lg font-bold", theme.price)}>{formatCurrency(product.price)}</span>
+                    <div className="flex items-end justify-between">
+                      <span className={cn("text-xl font-black font-sans leading-none", theme.price)}>{formatCurrency(product.price)}</span>
                       <div className="text-right">
-                        <span className={cn("block text-[11px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap", theme.stock)}>
+                        <span className={cn("block text-[11px] font-black px-2.5 py-1 rounded-full border whitespace-nowrap", theme.stock)}>
                           {t.stock}: {product.stock}
                         </span>
                       </div>

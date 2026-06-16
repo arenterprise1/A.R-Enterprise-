@@ -185,23 +185,36 @@ export default function Receipt({ sale, shopInfo, onClose, lang }: ReceiptProps)
         }
       `}} />
 
-      <div className="bg-white w-full max-w-2xl rounded-[32px] overflow-hidden shadow-2xl flex flex-col max-h-[95vh]">
-        {/* Actions - Hidden on print */}
-        <div className="p-6 border-b border-gray-100 flex justify-between items-center print:hidden flex-shrink-0">
-          <div className="flex flex-col">
-            <h3 className="font-bold italic text-gray-900">{t.receipt}</h3>
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{t.invoiceView}</p>
+      <div className="bg-white w-full max-w-3xl rounded-[32px] overflow-hidden shadow-2xl flex flex-col max-h-[95vh]">
+        {/* Sale Confirmation Header - Hidden on Print */}
+        <div className="bg-emerald-50 dark:bg-emerald-950/20 border-b border-emerald-100 p-6 flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0 print:hidden">
+          <div className="flex items-center gap-3 text-center sm:text-left flex-col sm:flex-row">
+            <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
+              <CheckCircle2 size={24} className="animate-bounce" />
+            </div>
+            <div>
+              <h3 className="font-sans font-black text-slate-900 text-lg sm:text-xl leading-tight">
+                {lang === 'bn' ? 'বিক্রয় সফলভাবে নিশ্চিত করা হয়েছে!' : 'Sale Completed Successfully!'}
+              </h3>
+              <p className="text-xs text-slate-500 mt-1 font-bold">
+                {lang === 'bn' 
+                  ? 'লেনদেনটি সিস্টেমে সংরক্ষিত হয়েছে এবং কাস্টমার লয়্যালটি পয়েন্ট আপডেট করা হয়েছে।' 
+                  : 'Transaction has been stored securely and customer rewards updated.'}
+              </p>
+            </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-center sm:justify-end shrink-0">
             <button 
               onClick={() => handlePrint(false)}
-              className="px-6 py-2.5 bg-black text-white rounded-2xl hover:scale-105 transition-all flex items-center gap-2 font-black text-sm italic tracking-wide cursor-pointer"
+              className="px-5 py-2.5 bg-indigo-600 text-white rounded-2xl hover:scale-105 active:scale-95 transition-all flex items-center gap-2 font-black text-xs uppercase tracking-wider cursor-pointer shadow-md shadow-indigo-500/10 hover:bg-indigo-700"
             >
-              <Printer size={16} /> {t.print}
+              <Printer size={15} /> 
+              {lang === 'bn' ? 'ক্যাশ মেমো প্রিন্ট' : 'Print Memo'}
             </button>
             <button 
               onClick={onClose}
               className="p-2.5 bg-gray-100 text-gray-500 rounded-2xl hover:bg-gray-200 transition-all border border-gray-200 cursor-pointer"
+              title={lang === 'bn' ? 'বন্ধ করুন' : 'Close'}
             >
               <X size={20} />
             </button>
@@ -268,7 +281,7 @@ export default function Receipt({ sale, shopInfo, onClose, lang }: ReceiptProps)
         </div>
 
         {/* Receipt Content Container */}
-        <div id="printable-receipt" className="p-10 font-sans text-sm print:p-0 overflow-y-auto bg-white print:overflow-visible relative flex-1">
+        <div id="printable-receipt" className="p-4 sm:p-10 font-sans text-sm print:p-0 overflow-y-auto bg-white print:overflow-visible relative flex-1">
           
           {/* 1. Classic Layout Block */}
           {selectedLayout === 'classic' && (
@@ -344,7 +357,7 @@ export default function Receipt({ sale, shopInfo, onClose, lang }: ReceiptProps)
                 </div>
 
                 {/* Items Table - Tali Style with Vertical Lines */}
-                <div className="mb-8 rounded-3xl border-2 overflow-hidden shadow-sm" style={{ borderColor: accentColor }}>
+                <div className="mb-8 rounded-3xl border-2 overflow-x-auto shadow-sm" style={{ borderColor: accentColor }}>
                   <table className="w-full border-collapse font-sans">
                     <thead>
                       <tr className="bg-white border-b-[3px]" style={{ color: accentColor, borderColor: accentColor }}>
@@ -465,7 +478,7 @@ export default function Receipt({ sale, shopInfo, onClose, lang }: ReceiptProps)
                 </div>
 
                 {/* Footer & Signature Section */}
-                <div className="mt-20 pt-8 grid grid-cols-2 gap-20">
+                <div className="mt-16 pt-8 grid grid-cols-2 gap-6 sm:gap-20">
                   <div className="text-center">
                     <div className="border-t-2 pt-3" style={{ borderColor: `${accentColor}30` }}>
                       <p className="text-xs font-black text-black uppercase tracking-widest italic">{t.customerSignature}</p>
