@@ -310,6 +310,112 @@ export default function StaffManagement({ userProfile, lang }: StaffManagementPr
           </div>
         </div>
       </div>
+
+      {/* Role and Permissions Reference Guide */}
+      <div className="pro-card p-6 bg-gradient-to-r from-slate-50 to-indigo-50/30 border border-slate-100 mt-8">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-8 h-8 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-600">
+            <Shield size={18} />
+          </div>
+          <div>
+            <h3 className="font-bold text-slate-800 text-base">
+              {lang === 'bn' ? 'শপ রোল ও অ্যাক্সেস পারমিশন গাইড' : 'Shop Roles & Access Permission Guide'}
+            </h3>
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-none mt-1">
+              {lang === 'bn' ? 'আপনার স্টাফ মেম্বারদের সুযোগ ও সীমাবদ্ধতা' : 'Limits and privileges of your staff roles'}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Owner Box */}
+          <div className="bg-white border border-slate-105 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all">
+            <div className="flex items-center gap-2.5 mb-3">
+              <span className="w-2.5 h-2.5 rounded-full bg-indigo-600"></span>
+              <h4 className="font-bold text-slate-900 text-sm">{lang === 'bn' ? 'দোকানের মালিক (Owner)' : 'Shop Owner'}</h4>
+            </div>
+            <p className="text-[11px] text-slate-500 leading-relaxed mb-4">
+              {lang === 'bn' ? 'দোকানের প্রতিষ্ঠাতা বা স্বত্বাধিকারী। সকল বিষয়ের উপর সর্বোচ্চ এবং অবাধ ক্ষমতা রয়েছে।' : 'Owner of the shop. Full, unrestricted administrative powers and access level across all tabs.'}
+            </p>
+            <ul className="space-y-2 border-t border-slate-100/60 pt-3">
+              <li className="flex items-start gap-2 text-[10px] text-slate-600 font-bold">
+                <span className="text-emerald-500 mt-0.5">✓</span>
+                <span>{lang === 'bn' ? 'স্টাফ পরিচালনা ও রোল নিয়োগ' : 'Manage Staff & Roles'}</span>
+              </li>
+              <li className="flex items-start gap-2 text-[10px] text-slate-600 font-bold">
+                <span className="text-emerald-500 mt-0.5">✓</span>
+                <span>{lang === 'bn' ? 'দোকানের নাম ও সেটিংস পরিবর্তন' : 'Edit Shop Profile & Colors'}</span>
+              </li>
+              <li className="flex items-start gap-2 text-[10px] text-slate-600 font-bold">
+                <span className="text-emerald-500 mt-0.5">✓</span>
+                <span>{lang === 'bn' ? 'যেকোনো বিক্রির হিসাব মোছা (Delete)' : 'Delete Sales & Invoices'}</span>
+              </li>
+              <li className="flex items-start gap-2 text-[10px] text-slate-600 font-bold">
+                <span className="text-emerald-500 mt-0.5">✓</span>
+                <span>{lang === 'bn' ? 'ইনভেন্টরি প্রোডাক্ট ও কাস্টমার ডিলিট' : 'Delete Products & Customers'}</span>
+              </li>
+            </ul>
+          </div>
+
+          {/* Manager Box */}
+          <div className="bg-white border border-slate-105 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all">
+            <div className="flex items-center gap-2.5 mb-3">
+              <span className="w-2.5 h-2.5 rounded-full bg-sky-500"></span>
+              <h4 className="font-bold text-slate-900 text-sm">{lang === 'bn' ? 'ম্যানেজার (Inventory Manager)' : 'Inventory Manager'}</h4>
+            </div>
+            <p className="text-[11px] text-slate-500 leading-relaxed mb-4">
+              {lang === 'bn' ? 'দোকানের মালামাল ও ইনভেন্টরি তদারকির দায়িত্ব প্রাপ্ত ভূমিকা। স্টক নিয়ন্ত্রণে সাহায্যকারী।' : 'Responsible for managing products and catalog. Stock controller option for inventory helper.'}
+            </p>
+            <ul className="space-y-2 border-t border-slate-100/60 pt-3">
+              <li className="flex items-start gap-2 text-[10px] text-slate-600 font-bold">
+                <span className="text-emerald-500 mt-0.5">✓</span>
+                <span>{lang === 'bn' ? 'প্রোডাক্ট যোগ ও স্টক এডিট' : 'Add Products & Update Stock'}</span>
+              </li>
+              <li className="flex items-start gap-2 text-[10px] text-slate-600 font-bold">
+                <span className="text-emerald-500 mt-0.5">✓</span>
+                <span>{lang === 'bn' ? 'সেলস হিস্ট্রি ও ড্যাশবোর্ড ভিউ' : 'View History & Dashboard'}</span>
+              </li>
+              <li className="flex items-start gap-2 text-[10px] text-slate-600 font-bold">
+                <span className="text-rose-500 mt-0.5 font-sans">✗</span>
+                <span className="text-slate-400 font-medium normal-case decoration-rose-500/40 line-through">{lang === 'bn' ? 'হিসাব বা রসিদ ডিলিট করা' : 'Delete Sales & Invoices'}</span>
+              </li>
+              <li className="flex items-start gap-2 text-[10px] text-slate-600 font-bold">
+                <span className="text-rose-500 mt-0.5 font-sans">✗</span>
+                <span className="text-slate-400 font-medium normal-case decoration-rose-500/40 line-through">{lang === 'bn' ? 'স্টাফ পরিচালনা ও সেটিংস' : 'Manage Staff or Settings'}</span>
+              </li>
+            </ul>
+          </div>
+
+          {/* Cashier Box */}
+          <div className="bg-white border border-slate-105 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all">
+            <div className="flex items-center gap-2.5 mb-3">
+              <span className="w-2.5 h-2.5 rounded-full bg-slate-400"></span>
+              <h4 className="font-bold text-slate-900 text-sm">{lang === 'bn' ? 'ক্যাশিয়ার (Cashier)' : 'Cashier'}</h4>
+            </div>
+            <p className="text-[11px] text-slate-500 leading-relaxed mb-4">
+              {lang === 'bn' ? 'শুধুমাত্র বিক্রয় কেন্দ্রে পণ্য বিক্রয়কারী মেম্বার। বিক্রয় এবং মেমো তৈরিতে সীমাবদ্ধ।' : 'Responsible for ringing sales via POS. Restricted strictly to cash transactions.'}
+            </p>
+            <ul className="space-y-2 border-t border-slate-100/60 pt-3">
+              <li className="flex items-start gap-2 text-[10px] text-slate-600 font-bold">
+                <span className="text-emerald-500 mt-0.5">✓</span>
+                <span>{lang === 'bn' ? 'POS এ পণ্য বিক্রয় ও রসিদ তৈরি' : 'Sell via POS & Print Bill'}</span>
+              </li>
+              <li className="flex items-start gap-2 text-[10px] text-slate-600 font-bold">
+                <span className="text-emerald-500 mt-0.5">✓</span>
+                <span>{lang === 'bn' ? 'কাস্টমার প্রোফাইল তৈরি ও সংরক্ষণ' : 'Create & Save Customer details'}</span>
+              </li>
+              <li className="flex items-start gap-2 text-[10px] text-slate-600 font-bold">
+                <span className="text-rose-500 mt-0.5 font-sans">✗</span>
+                <span className="text-slate-400 font-medium normal-case decoration-rose-500/40 line-through">{lang === 'bn' ? 'ইনভেন্টরি প্রোডাক্ট মোডিফাই' : 'Modify/Add Inventory Items'}</span>
+              </li>
+              <li className="flex items-start gap-2 text-[10px] text-slate-600 font-bold">
+                <span className="text-rose-500 mt-0.5 font-sans">✗</span>
+                <span className="text-slate-400 font-medium normal-case decoration-rose-500/40 line-through">{lang === 'bn' ? 'বিক্রির ইতিহাস মোছা বা ডিলিট' : 'Delete Sales & Accounts data'}</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

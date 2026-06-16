@@ -9,13 +9,13 @@ import {
   signInWithPopup,
   GoogleAuthProvider
 } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { Store, LogIn, UserPlus, LogOut, ArrowRight, Loader2, Chrome, Phone, Lock, User as UserIcon, X, Mail } from 'lucide-react';
+import { doc, getDoc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { Store, LogIn, UserPlus, LogOut, ArrowRight, Loader2, Chrome, Phone, Lock, User as UserIcon, X, Mail, Wind } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { translations, Language } from '../translations';
 import { MascotCharacter } from './MascotCharacter';
 
-export const AR_LOGO_BASE64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAfQAAAH0CAYAAADL1t+KAAAQAElEQVR4AeydB4BUtdbHT5Lbpm6nNxUUFbH3il0Q6xN7wYaCgCBFirCoIIqAgg0bimJZbIiiKIgKYkMRRaS3pWwvU2/PdzK4PPTzvWdhlZJxMrclJ7";
+export const AR_LOGO_BASE64 = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImciIHgxPSIwJSIgeTE9IjAlIiB4Mj0iMTAwJSIgeTI9IjEwMCUiPjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiM0ZjQ2ZTUiLz48c3RvcCBvZmZzZXQ9IjUwJSIgc3RvcC1jb2xvcj0iIzliNTliNiIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iI2VjNDg5OSIvPjwvbGluZWFyR3JhZGllbnQ+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiByeD0iMzAiIGZpbGw9InVybCgjZykiLz48dGV4dCB4PSI0OSIgeT0iNjYiIGZvbnQtZmFtaWx5PSJzeXN0ZW0tdWksIC1hcHBsZS1zeXN0ZW0sIHNhbnMtc2VyaWYiIGZvbnQtd2VpZ2h0PSI5MDAiIGZvbnQtc2l6ZT0iNDYiIGZpbGw9IndoaXRlIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBsZXR0ZXItc3BhY2luZz0iLTIiPkFSPC90ZXh0PjxjaXJjbGUgY3g9IjUwIiBjeT0iNTAiIHI9IjQyIiBmaWxsPSJub25lIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIuNSIgc3Ryb2tlLWRhc2hhcnJheT0iNiA2IiBvcGFjaXR5PSIwLjQ1Ii8+PC9zdmc+";
 
 interface ElegantInputProps {
   label: string;
@@ -23,9 +23,10 @@ interface ElegantInputProps {
   value: string;
   onChange: (val: string) => void;
   icon: React.ReactNode;
+  autoComplete?: string;
 }
 
-function ElegantInput({ label, type, value, onChange, icon }: ElegantInputProps) {
+function ElegantInput({ label, type, value, onChange, icon, autoComplete }: ElegantInputProps) {
   const [focused, setFocused] = useState(false);
   
   return (
@@ -40,6 +41,7 @@ function ElegantInput({ label, type, value, onChange, icon }: ElegantInputProps)
         onChange={(e) => onChange(e.target.value)}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
+        autoComplete={autoComplete}
         className="w-full pl-8 pr-1 py-1.5 bg-transparent text-slate-850 text-sm border-b border-slate-200 focus:border-[#9b59b6] focus:outline-none transition-all duration-300 font-semibold"
       />
       <label 
@@ -86,11 +88,15 @@ export default function Auth({ children }: { children: React.ReactNode }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
+  const [saveToGoogle, setSaveToGoogle] = useState(true);
   const [phone, setPhone] = useState('');
   const [error, setError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
   const [showLoginOptions, setShowLoginOptions] = useState(true);
   const [isMobileScreen, setIsMobileScreen] = useState(false);
+
+  const [selectedPlan, setSelectedPlan] = useState<'basic' | 'standard' | 'premium'>('standard');
 
   useEffect(() => {
     const handleResize = () => {
@@ -200,6 +206,10 @@ export default function Auth({ children }: { children: React.ReactNode }) {
       console.error(err);
       if (err.code === 'auth/popup-closed-by-user') {
         setError(lang === 'bn' ? 'লগইন উইন্ডোটি বন্ধ করা হয়েছে।' : 'Login popup was closed.');
+      } else if (err.code === 'auth/network-request-failed' || err.message?.includes('network-request-failed')) {
+        setError(lang === 'bn' 
+          ? 'নেটওয়ার্ক সংযোগ ব্যর্থ হয়েছে। অনুগ্রহ করে আপনার ইন্টারনেট সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।' 
+          : 'Network connection failed. Please check your internet connection and try again.');
       } else {
         setError(lang === 'bn' ? 'গুগল লগইন করতে সমস্যা হয়েছে। আবার চেষ্টা করুন।' : 'Google login failed. Try again.');
       }
@@ -273,6 +283,10 @@ export default function Auth({ children }: { children: React.ReactNode }) {
         setError(lang === 'bn' 
           ? 'ফায়ারবেসে ইমেইল/পাসওয়ার্ড লগইন অপশনটি বন্ধ আছে। এটি ফায়ারবেস কনসোল থেকে চালু করুন।' 
           : 'Email/Password authentication is disabled. Please enable it in Firebase Console.');
+      } else if (err.code === 'auth/network-request-failed' || err.message?.includes('network-request-failed')) {
+        setError(lang === 'bn' 
+          ? 'নেটওয়ার্ক সংযোগ ব্যর্থ হয়েছে। অনুগ্রহ করে আপনার ইন্টারনেট সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।' 
+          : 'Network connection failed. Please check your internet connection and try again.');
       } else {
         setError(err.message || 'Error occurred');
       }
@@ -299,10 +313,69 @@ export default function Auth({ children }: { children: React.ReactNode }) {
 
     try {
       if (isLogin) {
-        await signInWithEmailAndPassword(auth, email, password);
+        let loginEmail = email.trim();
+        if (!loginEmail.includes('@')) {
+          // Treat as username lookup
+          const uName = loginEmail.toLowerCase();
+          const usernameQuery = query(
+            collection(db, 'users'), 
+            where('username', '==', uName)
+          );
+          const querySnapshot = await getDocs(usernameQuery);
+          if (querySnapshot.empty) {
+            setError(lang === 'bn' ? 'ইউজারনেমটি সঠিক নয় বা খুঁজে পাওয়া যায়নি।' : 'Username not found.');
+            setAuthLoading(false);
+            return;
+          }
+          const userDoc = querySnapshot.docs[0].data();
+          loginEmail = userDoc.email;
+        }
+        await signInWithEmailAndPassword(auth, loginEmail, password);
       } else {
+        // Registration / Sign up
+        if (!username.trim()) {
+          setError(lang === 'bn' ? 'দয়া করে একটি ইউজারনেম দিন।' : 'Please enter a username.');
+          setAuthLoading(false);
+          return;
+        }
+        
+        const usernameRegex = /^[a-zA-Z0-9_]{3,15}$/;
+        if (!usernameRegex.test(username.trim())) {
+          setError(lang === 'bn' 
+            ? 'ইউজারনেম ৩ থেকে ১৫ অক্ষরের হতে হবে এবং শুধুমাত্র ইংরেজি অক্ষর, সংখ্যা বা আন্ডারস্কোর (_) থাকতে পারবে (কোনো স্পেস নয়)।' 
+            : 'Username must be 3-15 characters and contain only letters, numbers, or underscores (no spaces).');
+          setAuthLoading(false);
+          return;
+        }
+
+        // Check if username already exists in Firestore
+        const usernameCheckQuery = query(
+          collection(db, 'users'),
+          where('username', '==', username.trim().toLowerCase())
+        );
+        const usernameCheckSnapshot = await getDocs(usernameCheckQuery);
+        if (!usernameCheckSnapshot.empty) {
+          setError(lang === 'bn' ? 'এই ইউজারনেমটি ইতিমধ্যে ব্যবহার করা হয়েছে।' : 'Username is already taken.');
+          setAuthLoading(false);
+          return;
+        }
+
+        safeStorage.setItem('dokan_pending_subscription_plan', selectedPlan);
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         await updateProfile(userCredential.user, { displayName: name });
+
+        // Instantly save document to users collection with username
+        await setDoc(doc(db, 'users', userCredential.user.uid), {
+          uid: userCredential.user.uid,
+          email: email.trim().toLowerCase(),
+          username: username.trim().toLowerCase(),
+          role: 'owner',
+          shopId: userCredential.user.uid,
+          name: name.trim(),
+          subscriptionPlan: selectedPlan,
+          subscriptionStatus: 'active',
+          subscriptionDate: Date.now()
+        });
       }
     } catch (err: any) {
       if (err.code === 'auth/email-already-in-use') {
@@ -317,6 +390,10 @@ export default function Auth({ children }: { children: React.ReactNode }) {
         setError(lang === 'bn' 
           ? 'ইমেইল/পাসওয়ার্ড লগইন অপশনটি বন্ধ আছে। এটি ফায়ারবেস কনসোল থেকে চালু করুন।' 
           : 'Email/Password login is not enabled in Firebase Console.');
+      } else if (err.code === 'auth/network-request-failed' || err.message?.includes('network-request-failed')) {
+        setError(lang === 'bn' 
+          ? 'নেটওয়ার্ক সংযোগ ব্যর্থ হয়েছে। অনুগ্রহ করে আপনার ইন্টারনেট সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।' 
+          : 'Network connection failed. Please check your internet connection and try again.');
       } else {
         setError(err.message || 'Error occurred');
       }
@@ -327,7 +404,7 @@ export default function Auth({ children }: { children: React.ReactNode }) {
 
   const renderSignInForm = (isMobile = false) => {
     return (
-      <form onSubmit={handleSubmit} className="w-full max-w-[325px] flex flex-col text-left">
+      <form onSubmit={handleSubmit} autoComplete="on" className="w-full max-w-[325px] flex flex-col text-left">
         <h2 className="text-2xl font-black text-slate-800 leading-tight mb-2 tracking-tight">
           {loginMode === 'staff' 
             ? t.loginAsStaff 
@@ -360,6 +437,7 @@ export default function Auth({ children }: { children: React.ReactNode }) {
               value={phone}
               onChange={setPhone}
               icon={<Phone size={16} />}
+              autoComplete="tel"
             />
             <ElegantInput
               label={t.staffPassword}
@@ -367,16 +445,18 @@ export default function Auth({ children }: { children: React.ReactNode }) {
               value={password}
               onChange={setPassword}
               icon={<Lock size={16} />}
+              autoComplete="current-password"
             />
           </div>
         ) : (
           <div className="space-y-1">
             <ElegantInput
-              label={lang === 'bn' ? 'ইমেইল এড্রেস' : 'Email Address'}
-              type="email"
+              label={lang === 'bn' ? 'ইউজারনেম অথবা ইমেইল এড্রেস' : 'Username or Email Address'}
+              type="text"
               value={email}
               onChange={setEmail}
               icon={<Mail size={16} />}
+              autoComplete="username"
             />
             <ElegantInput
               label={lang === 'bn' ? 'পাসওয়ার্ড' : 'Password'}
@@ -384,7 +464,23 @@ export default function Auth({ children }: { children: React.ReactNode }) {
               value={password}
               onChange={setPassword}
               icon={<Lock size={16} />}
+              autoComplete="current-password"
             />
+            
+            {/* Save securely to Google checkbox */}
+            <div className="flex items-center gap-2 mt-1 mb-4 select-none">
+              <input 
+                type="checkbox" 
+                id="saveToGoogleLogin" 
+                checked={saveToGoogle} 
+                onChange={(e) => setSaveToGoogle(e.target.checked)}
+                className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-555 cursor-pointer h-4 w-4"
+              />
+              <label htmlFor="saveToGoogleLogin" className="text-xs font-semibold text-slate-500 cursor-pointer leading-tight">
+                {lang === 'bn' ? 'গুগলে পাসওয়ার্ড সুরক্ষিত রাখুন' : 'Save securely to Google'}
+              </label>
+            </div>
+
             <div className="flex justify-end -mt-3 mb-4">
               <button 
                 type="button" 
@@ -444,7 +540,7 @@ export default function Auth({ children }: { children: React.ReactNode }) {
                 />
                 <path
                   fill="#FBBC05"
-                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
                 />
                 <path
                   fill="#EA4335"
@@ -474,10 +570,15 @@ export default function Auth({ children }: { children: React.ReactNode }) {
 
   const renderSignUpForm = (isMobile = false) => {
     return (
-      <form onSubmit={handleSubmit} className="w-full max-w-[325px] flex flex-col text-left">
-        <h2 className="text-2xl font-black text-slate-800 leading-tight mb-4 tracking-tight">
-          {lang === 'bn' ? 'নতুন অ্যাকাউন্ট খুলুন' : 'Create Account'}
+      <form onSubmit={handleSubmit} autoComplete="on" className="w-full max-w-[325px] flex flex-col text-left">
+        <h2 className="text-2xl font-black text-slate-800 leading-tight mb-2 tracking-tight">
+          {lang === 'bn' ? 'নতুন অ্যাকাউন্ট তৈরি' : 'Create Account'}
         </h2>
+        <p className="text-xs text-slate-500 mb-6 font-semibold leading-relaxed">
+          {lang === 'bn' 
+            ? 'দোকানের হিসাব ও স্মার্ট ইনভেন্টরি পরিচালনা করতে আপনার ব্যক্তিগত অ্যাকাউন্ট তৈরি করুন।' 
+            : 'Fill in your details to create a shop owner account and start managing transactions.'}
+        </p>
 
         <div className="space-y-1">
           <ElegantInput
@@ -486,6 +587,15 @@ export default function Auth({ children }: { children: React.ReactNode }) {
             value={name}
             onChange={setName}
             icon={<UserIcon size={16} />}
+            autoComplete="name"
+          />
+          <ElegantInput
+            label={lang === 'bn' ? 'ইউজারনেম (ইংরেজি ৩-১৫ অক্ষর)' : 'Username (3-15 chars)'}
+            type="text"
+            value={username}
+            onChange={setUsername}
+            icon={<UserIcon size={16} />}
+            autoComplete="username"
           />
           <ElegantInput
             label={lang === 'bn' ? 'ইমেইল এড্রেস' : 'Email Address'}
@@ -493,6 +603,7 @@ export default function Auth({ children }: { children: React.ReactNode }) {
             value={email}
             onChange={setEmail}
             icon={<Mail size={16} />}
+            autoComplete="email"
           />
           <ElegantInput
             label={lang === 'bn' ? 'পাসওয়ার্ড' : 'Password'}
@@ -500,7 +611,22 @@ export default function Auth({ children }: { children: React.ReactNode }) {
             value={password}
             onChange={setPassword}
             icon={<Lock size={16} />}
+            autoComplete="new-password"
           />
+        </div>
+
+        {/* Save securely to Google checkbox */}
+        <div className="flex items-center gap-2 mt-1 mb-4 select-none">
+          <input 
+            type="checkbox" 
+            id="saveToGoogleSignUp" 
+            checked={saveToGoogle} 
+            onChange={(e) => setSaveToGoogle(e.target.checked)}
+            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-555 cursor-pointer h-4 w-4"
+          />
+          <label htmlFor="saveToGoogleSignUp" className="text-xs font-semibold text-slate-500 cursor-pointer leading-tight">
+            {lang === 'bn' ? 'গুগলে পাসওয়ার্ড সুরক্ষিত রাখুন' : 'Save securely to Google'}
+          </label>
         </div>
 
         {error && (
@@ -516,10 +642,47 @@ export default function Auth({ children }: { children: React.ReactNode }) {
         >
           {authLoading ? <Loader2 className="animate-spin" size={18} /> : (
             <>
-              <span>{lang === 'bn' ? 'সাইনআপ করুন' : 'Sign Up'}</span>
+              <span>{lang === 'bn' ? 'নিবন্ধন সম্পন্ন করুন' : 'Sign Up Now'}</span>
               <ArrowRight size={16} className="stroke-[3]" />
             </>
           )}
+        </button>
+
+        {/* Google sign-up option */}
+        <div className="relative my-4">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-slate-100"></div>
+          </div>
+          <div className="relative flex justify-center text-[9px] uppercase italic font-black">
+            <span className="bg-white px-3 text-slate-400 tracking-widest">{lang === 'bn' ? 'অথবা' : 'OR'}</span>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleGoogleLogin}
+          disabled={authLoading}
+          className="w-full h-11 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-2xl flex items-center justify-center gap-3 transition-all hover:scale-[1.01] active:scale-[0.99] shadow-sm text-xs cursor-pointer mb-2"
+        >
+          <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+            <path
+              fill="#4285F4"
+              d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+            />
+            <path
+              fill="#34A853"
+              d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+            />
+            <path
+              fill="#FBBC05"
+              d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+            />
+            <path
+              fill="#EA4335"
+              d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+            />
+          </svg>
+          <span>{lang === 'bn' ? 'গুগল দিয়ে নিবন্ধন করুন' : 'Sign up with Google'}</span>
         </button>
 
         {isMobile && (
@@ -690,7 +853,7 @@ export default function Auth({ children }: { children: React.ReactNode }) {
                   className="w-full h-full object-contain filter drop-shadow-md rounded-lg"
                 />
               </div>
-              <span className="text-white/60 font-black text-[10px] tracking-widest uppercase mt-1">A.R ENTERPRISE</span>
+              <span className="text-white/80 font-black text-xs tracking-widest uppercase mt-1">A.R Enterprise</span>
             </div>
 
             {/* Language Switch */}
@@ -935,14 +1098,15 @@ export default function Auth({ children }: { children: React.ReactNode }) {
           {/* Mobile Sliding Frame (hidden on md and up) */}
           <div className="md:hidden w-full max-w-[400px] bg-white rounded-3xl p-8 shadow-2xl border border-slate-100 flex flex-col items-center">
             <div className="flex flex-col items-center mb-6">
-              <div className="w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center text-white mb-3 shadow-md p-1.5 overflow-hidden">
-                <img 
-                  src={AR_LOGO_BASE64} 
-                  alt="A.R Logo" 
-                  className="w-full h-full object-contain"
-                />
+              <div className="flex items-center justify-center bg-gradient-to-tr from-[#9b59b6] to-[#4f46e5] text-white w-14 h-14 rounded-2xl shadow-lg shadow-indigo-500/20 mb-3 hover:scale-105 transition-all">
+                <Wind className="w-7 h-7 text-white" />
               </div>
-              <span className="text-[10px] text-slate-400 font-extrabold tracking-widest uppercase">A.R Enterprise</span>
+              <h1 className="text-xl font-black bg-gradient-to-r from-[#4f46e5] via-[#9b59b6] to-[#e91e63] bg-clip-text text-transparent tracking-tight text-center uppercase">
+                A.R Enterprise
+              </h1>
+              <span className="text-[8px] text-slate-400 font-black tracking-widest uppercase mt-1 leading-none">
+                {lang === 'bn' ? 'স্মার্ট পয়েন্ট অফ সেলস' : 'Smart POS Solution'}
+              </span>
             </div>
 
             <AnimatePresence mode="wait">
@@ -1115,6 +1279,17 @@ export function UserMenu({ userProfile }: { userProfile?: any }) {
                   />
                   <p className="text-[10px] text-slate-400 mt-1">লগইন আইডি / ইমেইল ঠিকানা পরিবর্তনযোগ্য নয়।</p>
                 </div>
+                {userProfile?.username && (
+                  <div>
+                    <label className="text-xs font-black uppercase text-slate-400 tracking-wider block mb-1">ইউজারনেম</label>
+                    <input
+                      type="text"
+                      disabled
+                      value={userProfile.username}
+                      className="w-full px-4 py-2.5 bg-slate-100 border-2 border-slate-200 text-slate-400 rounded-2xl outline-none font-semibold cursor-not-allowed"
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="p-6 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-3 rounded-b-[28px]">

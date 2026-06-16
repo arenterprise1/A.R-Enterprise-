@@ -1,12 +1,12 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 0. Default Deny
+    // 0. Default Deny Catch-all
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Helper functions
+    // Comprehensive Helper Functions
     function isSignedIn() {
       return request.auth != null;
     }
@@ -15,24 +15,27 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
-    function isOwner() {
-      return isSignedIn() && getUserData().role == 'owner';
-    }
-
-    function isInventoryManager() {
-       return isSignedIn() && (getUserData().role == 'owner' || getUserData().role == 'inventory_manager');
-    }
-
-    function isCashier() {
-       return isSignedIn() && (getUserData().role == 'owner' || getUserData().role == 'cashier');
-    }
-
     function getShopId() {
       return getUserData().shopId;
     }
 
+    function getUserRole() {
+      return getUserData().role;
+    }
+
+    // Role checks
+    function isOwner() {
+      return isSignedIn() && getUserRole() == 'owner';
+    }
+
+    // Any valid employee/staff of the shop
     function isStaffMember(shopId) {
       return isSignedIn() && getShopId() == shopId;
+    }
+
+    // Unified helper for any authenticated shop staff member
+    function isAnyStaff() {
+      return isSignedIn() && (getUserRole() == 'owner' || getUserRole() == 'inventory_manager' || getUserRole() == 'cashier');
     }
 
     function isValidId(id) {
@@ -47,36 +50,29 @@ service cloud.firestore {
       return resource.data;
     }
 
-    // User Profile Rules
+    // 1. User Profiles
     match /users/{userId} {
       allow get: if isSignedIn() && (request.auth.uid == userId || getShopId() == existing().shopId);
       allow list: if isSignedIn() && getShopId() == resource.data.shopId;
       allow create: if isSignedIn() && request.auth.uid == userId;
-      allow update: if isSignedIn() && request.auth.uid == userId && incoming().role == existing().role; // Users can't change their own role
-      allow update: if isOwner() && getShopId() == existing().shopId; // Owners can change roles of staff
-      allow delete: if isOwner() && getShopId() == existing().shopId && request.auth.uid != userId; // Owners can delete staff but not themselves
+      allow update: if isSignedIn() && request.auth.uid == userId && incoming().role == existing().role;
+      allow update: if isOwner() && getShopId() == existing().shopId;
+      allow delete: if isOwner() && getShopId() == existing().shopId && request.auth.uid != userId;
     }
 
+    // 2. Invitations
     match /invitations/{inviteId} {
-      // Secure hybrid invitations verification:
-      // 1. Phone/Password composite key (document ID is phone_password):
-      //    We allow unauthenticated get with a strict matches rule to verify password during staff login.
-      //    The key is unguessable, making brute-forcing or unauthorized retrieval impossible.
-      // 2. Email invite key (document ID is verified email):
-      //    We allow get for signed-in users whose verified email matches the invitation document ID.
       allow get: if (inviteId.matches('.+_.+')) 
                     || (isSignedIn() && request.auth.token.email_verified == true && request.auth.token.email.toLowerCase() == inviteId);
-      
-      // Restrict list to owners to prevent staff or public enumerations
       allow list: if isOwner() && resource.data.shopId == getShopId();
       allow create: if isOwner() && incoming().shopId == getShopId() && incoming().invitedBy == request.auth.uid;
       allow delete: if isOwner() && existing().shopId == getShopId();
     }
 
-    // Product Validation
+    // 3. Product Catalog
     function isValidProduct(data) {
       return data.keys().hasAll(['name', 'price', 'stock', 'category', 'unit', 'shopId']) 
-        && data.keys().size() >= 6 && data.keys().size() <= 13
+        && data.keys().size() >= 6 && data.keys().size() <= 30
         && data.name is string && data.name.size() <= 200
         && data.price is number && data.price >= 0
         && data.stock is number
@@ -90,22 +86,22 @@ service cloud.firestore {
       allow list: if isSignedIn() && resource.data.shopId == getShopId();
       allow get: if isStaffMember(resource.data.shopId);
       
-      allow create: if isInventoryManager() 
+      allow create: if isAnyStaff() 
         && isValidId(productId)
         && isValidProduct(incoming());
       
-      allow update: if isInventoryManager()
+      allow update: if isAnyStaff()
         && isStaffMember(existing().shopId)
         && isValidProduct(incoming())
         && incoming().shopId == existing().shopId;
       
-      allow delete: if isInventoryManager() && isStaffMember(existing().shopId);
+      allow delete: if isAnyStaff() && isStaffMember(existing().shopId);
     }
 
-    // Sale Validation
+    // 4. Sales Records
     function isValidSale(data) {
       return data.keys().hasAll(['timestamp', 'totalAmount', 'shopId', 'items', 'createdBy'])
-        && data.keys().size() >= 5 && data.keys().size() <= 17
+        && data.keys().size() >= 5 && data.keys().size() <= 40
         && data.timestamp is number
         && data.totalAmount is number && data.totalAmount >= 0
         && data.shopId == getShopId()
@@ -117,9 +113,9 @@ service cloud.firestore {
 
     match /sales/{saleId} {
       allow list: if isSignedIn() && resource.data.shopId == getShopId();
-      allow get: if true; // Public access for scanning invoices via QR Code
+      allow get: if true; // Public view for invoicing QR code
       
-      allow create: if isCashier()
+      allow create: if isAnyStaff()
         && isValidId(saleId)
         && isValidSale(incoming());
       
@@ -127,23 +123,25 @@ service cloud.firestore {
       allow delete: if isOwner() && isStaffMember(existing().shopId);
     }
 
+    // 5. Customer Loyalty database
     match /customers/{customerId} {
       allow list: if isSignedIn() && resource.data.shopId == getShopId();
       allow get: if isStaffMember(resource.data.shopId);
       
-      allow create: if isCashier()
+      allow create: if isAnyStaff()
         && isValidId(customerId)
         && incoming().shopId == getShopId();
       
-      allow update: if isCashier()
+      allow update: if isAnyStaff()
         && isStaffMember(existing().shopId)
         && incoming().shopId == existing().shopId;
         
       allow delete: if isOwner() && isStaffMember(existing().shopId);
     }
 
+    // 6. Shop Profile Info
     match /shops/{shopId} {
-      allow get: if true; // Public access to shop info for QR Code scan views
+      allow get: if true; // Public access for client display QR Code
       allow write: if isOwner() && getShopId() == shopId;
     }
   }

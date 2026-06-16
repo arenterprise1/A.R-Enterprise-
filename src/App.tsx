@@ -31,6 +31,7 @@ import Settings from './components/Settings';
 import Customers from './components/Customers';
 import StaffManagement from './components/StaffManagement';
 import Auth from './components/Auth';
+import SubscriptionGate from './components/SubscriptionGate';
 import Receipt from './components/Receipt';
 import GeminiAssistant from './components/GeminiAssistant';
 import { Product, Sale, View, SaleItem, ShopInfo, Customer, UserProfile } from './types';
@@ -62,6 +63,14 @@ export default function App() {
   const [lastSale, setLastSale] = useState<Sale | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
+
+  const [ownerSubscription, setOwnerSubscription] = useState<{
+    status: string;
+    plan: string;
+    date: number;
+  } | null>(null);
+  const [ownerSubLoading, setOwnerSubLoading] = useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   // Public Guest invoice sharing states
   const [publicSale, setPublicSale] = useState<Sale | null>(null);
@@ -188,12 +197,17 @@ export default function App() {
         // Only run initialization if profile truly doesn't exist
         try {
           // Check for invitation
+          const emailPrefix = user.email ? user.email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '') : '';
+          const randomSuffix = Math.floor(100 + Math.random() * 900);
+          const defaultUsername = `${emailPrefix || 'user'}_${randomSuffix}`.toLowerCase().substring(0, 15);
+
           const inviteDoc = await getDoc(doc(db, 'invitations', user.email?.toLowerCase() || ''));
           if (inviteDoc.exists()) {
             const inviteData = inviteDoc.data();
             const newProfile: UserProfile = {
               uid: user.uid,
               email: user.email!,
+              username: defaultUsername,
               role: inviteData.role,
               shopId: inviteData.shopId,
               name: user.displayName || ''
@@ -203,14 +217,25 @@ export default function App() {
             // onSnapshot will trigger again with the new data
           } else {
             // Create as fresh owner
+            let pendingPlan = 'basic';
+            try {
+              pendingPlan = localStorage.getItem('dokan_pending_subscription_plan') || 'basic';
+            } catch {}
             const newProfile: UserProfile = {
               uid: user.uid,
               email: user.email!,
+              username: defaultUsername,
               role: 'owner',
               shopId: user.uid,
-              name: user.displayName || ''
+              name: user.displayName || '',
+              subscriptionPlan: pendingPlan,
+              subscriptionStatus: 'pending',
+              subscriptionDate: 0
             };
             await setDoc(doc(db, 'users', user.uid), newProfile);
+            try {
+              localStorage.removeItem('dokan_pending_subscription_plan');
+            } catch {}
             // onSnapshot will trigger again
           }
         } catch (error) {
@@ -222,6 +247,31 @@ export default function App() {
 
     return () => unsub();
   }, [user]);
+
+  // Listen to owner's subscription status if the current logged in user is a staff
+  useEffect(() => {
+    if (!userProfile || userProfile.role === 'owner' || !userProfile.shopId) {
+      setOwnerSubscription(null);
+      setOwnerSubLoading(false);
+      return;
+    }
+    setOwnerSubLoading(true);
+    const ownerDocRef = doc(db, 'users', userProfile.shopId);
+    return onSnapshot(ownerDocRef, (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        setOwnerSubscription({
+          status: data.subscriptionStatus || 'active',
+          plan: data.subscriptionPlan || 'standard',
+          date: data.subscriptionDate || Date.now()
+        });
+      }
+      setOwnerSubLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, `users/${userProfile.shopId}`);
+      setOwnerSubLoading(false);
+    });
+  }, [userProfile]);
 
   // Listen to Shop Info
   useEffect(() => {
@@ -300,6 +350,10 @@ export default function App() {
 
   const handleAddProduct = async (newProduct: Omit<Product, 'id' | 'shopId'>) => {
     if (!userProfile) return;
+    if (userProfile.role !== 'owner' && userProfile.role !== 'inventory_manager') {
+      alert(lang === 'bn' ? 'শুধুমাত্র মালিক এবং ম্যানেজার প্রোডাক্ট যোগ করতে পারবেন।' : 'Only owner and manager can add products.');
+      return;
+    }
     try {
       // Sanitize undefined fields
       const sanitizedProduct = JSON.parse(JSON.stringify(newProduct));
@@ -314,6 +368,10 @@ export default function App() {
 
   const handleUpdateProduct = async (product: Product) => {
     if (!userProfile) return;
+    if (userProfile.role !== 'owner' && userProfile.role !== 'inventory_manager') {
+      alert(lang === 'bn' ? 'শুধুমাত্র মালিক এবং ম্যানেজার প্রোডাক্ট এডিট করতে পারবেন।' : 'Only owner and manager can update products.');
+      return;
+    }
     const { id, ...data } = product;
     try {
       // Sanitize undefined fields
@@ -326,6 +384,10 @@ export default function App() {
 
   const handleDeleteProduct = async (id: string) => {
     if (!userProfile) return;
+    if (userProfile.role !== 'owner' && userProfile.role !== 'inventory_manager') {
+      alert(lang === 'bn' ? 'শুধুমাত্র মালিক এবং ম্যানেজার প্রোডাক্ট ডিলিট করতে পারবেন।' : 'Only owner and manager can delete products.');
+      return;
+    }
     try {
       await deleteDoc(doc(db, 'products', id));
     } catch (error) {
@@ -334,7 +396,10 @@ export default function App() {
   };
 
   const handleDeleteSale = async (id: string) => {
-    if (!userProfile || userProfile.role !== 'owner') return;
+    if (!userProfile || userProfile.role !== 'owner') {
+      alert(lang === 'bn' ? 'শুধুমাত্র শপ অনার বিক্রির হিসাব ডিলিট করতে পারবেন।' : 'Only shop owner can delete sales records.');
+      return;
+    }
     try {
       await deleteDoc(doc(db, 'sales', id));
     } catch (error) {
@@ -364,7 +429,10 @@ export default function App() {
   };
 
   const handleDeleteCustomer = async (id: string) => {
-    if (!userProfile || userProfile.role !== 'owner') return;
+    if (!userProfile || userProfile.role !== 'owner') {
+      alert(lang === 'bn' ? 'শুধুমাত্র শপ অনার কাস্টমার ডিলিট করতে পারবেন।' : 'Only shop owner can delete customer profiles.');
+      return;
+    }
     try {
       await deleteDoc(doc(db, 'customers', id));
     } catch (error) {
@@ -381,7 +449,22 @@ export default function App() {
     }
   };
 
-  const handleCompleteSale = async (items: SaleItem[], discount: number, customerInfo?: { name: string; phone: string; address: string; saveToDatabase?: boolean }) => {
+  const handleCompleteSale = async (
+    items: SaleItem[], 
+    discount: number, 
+    customerInfo?: { name: string; phone: string; address: string; saveToDatabase?: boolean },
+    paymentDetails?: {
+      paymentMethod: 'cash' | 'card' | 'bkash' | 'nagad' | 'rocket' | 'qr';
+      pointsEarned: number;
+      pointsRedeemed: number;
+      discountType: 'percentage' | 'fixed' | 'promo' | 'loyalty';
+      promoCode?: string;
+      digitalReceiptSent?: boolean;
+      receiptSentType?: 'sms' | 'email';
+      receiptSentValue?: string;
+      offline?: boolean;
+    }
+  ) => {
     if (!userProfile) return;
     const totalAmount = items.reduce((sum, item) => sum + item.total, 0);
     const payableAmount = Math.max(0, totalAmount - discount);
@@ -400,46 +483,83 @@ export default function App() {
       customerPhone: customerInfo?.phone || '',
       customerAddress: customerInfo?.address || '',
       shopId: userProfile.shopId,
-      createdBy: userProfile.uid
+      createdBy: userProfile.uid,
+      // Advanced checkout fields
+      paymentMethod: paymentDetails?.paymentMethod || 'cash',
+      pointsEarned: paymentDetails?.pointsEarned || 0,
+      pointsRedeemed: paymentDetails?.pointsRedeemed || 0,
+      discountType: paymentDetails?.discountType || 'fixed',
+      promoCode: paymentDetails?.promoCode || '',
+      digitalReceiptSent: paymentDetails?.digitalReceiptSent || false,
+      receiptSentType: paymentDetails?.receiptSentType || '',
+      receiptSentValue: paymentDetails?.receiptSentValue || '',
+      offline: paymentDetails?.offline || false
     };
 
+    let completedSale: Sale | undefined;
     try {
-      const docRef = await addDoc(collection(db, 'sales'), saleData);
-      const completedSale = { id: docRef.id, ...saleData } as Sale;
-      setLastSale(completedSale);
+      try {
+        const docRef = await addDoc(collection(db, 'sales'), saleData);
+        completedSale = { id: docRef.id, ...saleData } as Sale;
+        setLastSale(completedSale);
+      } catch (error) {
+        handleFirestoreError(error, OperationType.WRITE, 'sales-completion-create-sale');
+        return;
+      }
       
       // Update stock 
       for (const item of items) {
         const productRef = doc(db, 'products', item.productId);
-        await updateDoc(productRef, {
-          stock: increment(-item.quantity)
-        });
+        try {
+          await updateDoc(productRef, {
+            stock: increment(-item.quantity)
+          });
+        } catch (error) {
+          handleFirestoreError(error, OperationType.WRITE, `sales-completion-update-stock-${item.productId}`);
+          return;
+        }
       }
 
       // Update Customer Stats
       if (customerInfo?.phone) {
         const existingCustomer = customers.find(c => c.phone === customerInfo.phone);
+        const earnedPoints = paymentDetails?.pointsEarned || 0;
+        const redeemedPoints = paymentDetails?.pointsRedeemed || 0;
+        const pointsDelta = earnedPoints - redeemedPoints;
+
         if (existingCustomer) {
-          await updateDoc(doc(db, 'customers', existingCustomer.id), {
-            totalSales: increment(payableAmount),
-            lastPurchaseDate: Date.now(),
-            address: customerInfo.address || existingCustomer.address,
-            name: customerInfo.name || existingCustomer.name
-          });
+          try {
+            await updateDoc(doc(db, 'customers', existingCustomer.id), {
+              totalSales: increment(payableAmount),
+              lastPurchaseDate: Date.now(),
+              address: customerInfo.address || existingCustomer.address,
+              name: customerInfo.name || existingCustomer.name,
+              points: increment(pointsDelta)
+            });
+         } catch (error) {
+            handleFirestoreError(error, OperationType.WRITE, `sales-completion-update-customer-${existingCustomer.id}`);
+            return;
+          }
         } else if (customerInfo.saveToDatabase) {
-          await addDoc(collection(db, 'customers'), {
-            name: customerInfo.name || 'Anonymous',
-            phone: customerInfo.phone,
-            address: customerInfo.address || '',
-            totalSales: payableAmount,
-            lastPurchaseDate: Date.now(),
-            shopId: userProfile.shopId
-          });
+          try {
+            await addDoc(collection(db, 'customers'), {
+              name: customerInfo.name || 'Anonymous',
+              phone: customerInfo.phone,
+              address: customerInfo.address || '',
+              totalSales: payableAmount,
+              lastPurchaseDate: Date.now(),
+              shopId: userProfile.shopId,
+              points: earnedPoints
+            });
+          } catch (error) {
+            handleFirestoreError(error, OperationType.WRITE, 'sales-completion-create-customer');
+            return;
+          }
         }
       }
       return completedSale;
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'sales-completion-batch');
+      handleFirestoreError(error, OperationType.WRITE, 'sales-completion-batch-fallback');
     }
   };
 
@@ -1006,12 +1126,65 @@ export default function App() {
     );
   }
 
-  if (profileLoading) {
+  if (profileLoading || (userProfile && userProfile.role !== 'owner' && ownerSubLoading)) {
     return (
       <div className="h-screen flex items-center justify-center bg-slate-50">
         <Loader2 className="animate-spin text-indigo-600" size={40} />
       </div>
     );
+  }
+
+  const isOwner = userProfile?.role === 'owner';
+  const subStatus = isOwner ? userProfile?.subscriptionStatus : (ownerSubscription?.status || 'active');
+  const subPlan = isOwner ? userProfile?.subscriptionPlan : (ownerSubscription?.plan || 'standard');
+  const subDate = isOwner ? userProfile?.subscriptionDate : (ownerSubscription?.date || Date.now());
+
+  const hasTrialPassed = subStatus === 'trial' && (Date.now() - (subDate || 0)) > 3 * 24 * 60 * 60 * 1000;
+  const isBlocked = userProfile && (!subStatus || subStatus === 'pending' || hasTrialPassed);
+
+  if (isBlocked) {
+    if (isOwner) {
+      return (
+        <Auth>
+          <SubscriptionGate 
+            userProfile={userProfile!} 
+            lang={lang} 
+            onActivated={() => {
+              showToast(lang === 'bn' ? 'সাবস্ক্রিপশন সফলভাবে সচল করা হয়েছে!' : 'Subscription activated successfully!', 'success');
+            }} 
+          />
+        </Auth>
+      );
+    } else {
+      return (
+        <Auth>
+          <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-6 text-white font-sans relative">
+            <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff05_1px,transparent_1px),linear-gradient(to_bottom,#ffffff05_1px,transparent_1px)] bg-[size:30px_30px] pointer-events-none" />
+            <div className="z-10 w-full max-w-md bg-slate-950/80 border border-slate-805 rounded-3xl p-8 shadow-2xl flex flex-col items-center text-center gap-6">
+              <div className="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 flex items-center justify-center">
+                <AlertCircle size={32} />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold">
+                  {lang === 'bn' ? 'দোকানের সাবস্ক্রিপশন মেয়াদোত্তীর্ণ!' : 'Shop Subscription Expired'}
+                </h3>
+                <p className="text-slate-400 text-xs mt-2 font-semibold leading-relaxed">
+                  {lang === 'bn' 
+                    ? 'আপনার এ.আর এন্টারপ্রাইজের মালিকের সাবস্ক্রিপশনের মেয়াদ শেষ হয়ে গিয়েছে। ড্যাশবোর্ডে প্রবেশ করতে অনুগ্রহ করে দোকানের মলিকের সাথে যোগাযোগ করুন।' 
+                    : 'Your shop owner subscription package has expired. To access standard POS list features, please contact your store owner/administrator to renew.'}
+                </p>
+              </div>
+              <button
+                onClick={() => auth.signOut()}
+                className="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer border border-slate-700"
+              >
+                {lang === 'bn' ? 'লগআউট করুন' : 'Log Out'}
+              </button>
+            </div>
+          </div>
+        </Auth>
+      );
+    }
   }
 
   return (
@@ -1024,6 +1197,7 @@ export default function App() {
         onLanguageChange={setLang}
         shopInfo={shopInfo}
         onUpdateShopInfo={handleUpdateShopInfo}
+        onUpgradeClick={() => setShowUpgradeModal(true)}
       >
         {activeView === 'dashboard' && <Dashboard products={products} sales={sales} lang={lang} />}
         {activeView === 'pos' && (
@@ -1070,6 +1244,7 @@ export default function App() {
             onUpdateShopInfo={handleUpdateShopInfo} 
             userProfile={userProfile!}
             lang={lang}
+            onUpgradeClick={() => setShowUpgradeModal(true)}
           />
         )}
         {activeView === 'staff' && userProfile && (
@@ -1082,6 +1257,30 @@ export default function App() {
       {lastSale && (
         <Receipt sale={lastSale} shopInfo={shopInfo} onClose={() => setLastSale(null)} lang={lang} />
       )}
+
+      {/* Subscription Upgrade Overlay Modal */}
+      <AnimatePresence>
+        {showUpgradeModal && userProfile && (
+          <div className="fixed inset-0 z-[300] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 30 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 30 }}
+              className="w-full max-w-4xl relative"
+            >
+              <SubscriptionGate 
+                userProfile={userProfile} 
+                lang={lang} 
+                onActivated={() => {
+                  setShowUpgradeModal(false);
+                  showToast(lang === 'bn' ? 'সাবস্ক্রিপশন সফলভাবে সচল করা হয়েছে!' : 'Subscription activated successfully!', 'success');
+                }}
+                onClose={() => setShowUpgradeModal(false)}
+              />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </Auth>
   );
 }

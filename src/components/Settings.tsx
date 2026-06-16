@@ -1,16 +1,20 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ShopInfo } from '../types';
-import { Save, Building2, MapPin, Phone, CheckCircle2, Image as ImageIcon, Trash2, Lock, Camera, Palette } from 'lucide-react';
+import { Save, Building2, MapPin, Phone, CheckCircle2, Image as ImageIcon, Trash2, Lock, Camera, Palette, User as UserIcon, LogOut, Mail, ShieldAlert, Key } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, formatCurrency } from '../lib/utils';
 import { UserProfile } from '../types';
 import { Language, translations } from '../translations';
+import { auth, db } from '../lib/firebase';
+import { updateProfile, signOut } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
 
 interface SettingsProps {
   shopInfo: ShopInfo;
   onUpdateShopInfo: (info: ShopInfo) => void;
   userProfile: UserProfile | null;
   lang: Language;
+  onUpgradeClick?: () => void;
 }
 
 const COLOR_PRESETS = [
@@ -22,7 +26,7 @@ const COLOR_PRESETS = [
   { name: 'Blue', value: '#2563eb', labelBangla: 'নীল', labelEnglish: 'Blue' },
 ];
 
-export default function Settings({ shopInfo, onUpdateShopInfo, userProfile, lang }: SettingsProps) {
+export default function Settings({ shopInfo, onUpdateShopInfo, userProfile, lang, onUpgradeClick }: SettingsProps) {
   const t = translations[lang];
   const [formData, setFormData] = useState(shopInfo);
   const [saved, setSaved] = useState(false);
@@ -34,6 +38,40 @@ export default function Settings({ shopInfo, onUpdateShopInfo, userProfile, lang
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const isOwner = userProfile?.role === 'owner';
+
+  // User profile settings states
+  const currentUser = auth.currentUser;
+  const [profileName, setProfileName] = useState(userProfile?.name || currentUser?.displayName || '');
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileSaved, setProfileSaved] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+  useEffect(() => {
+    if (userProfile) {
+      setProfileName(userProfile.name || currentUser?.displayName || '');
+    }
+  }, [userProfile, currentUser]);
+
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser) return;
+    if (!profileName.trim()) {
+      alert(lang === 'bn' ? 'দয়া করে আপনার নাম লিখুন।' : 'Please enter your name.');
+      return;
+    }
+    setProfileSaving(true);
+    try {
+      await updateProfile(currentUser, { displayName: profileName });
+      await setDoc(doc(db, 'users', currentUser.uid), { name: profileName }, { merge: true });
+      setProfileSaved(true);
+      setTimeout(() => setProfileSaved(false), 3000);
+    } catch (err) {
+      console.error('Failed to update user profile from settings:', err);
+      alert(lang === 'bn' ? 'প্রোফাইল আপডেট করতে ব্যর্থ হয়েছে!' : 'Failed to update user profile!');
+    } finally {
+      setProfileSaving(false);
+    }
+  };
 
   const startCamera = async () => {
     try {
@@ -371,6 +409,63 @@ export default function Settings({ shopInfo, onUpdateShopInfo, userProfile, lang
           </div>
         </div>
 
+        {/* Active Subscription Section */}
+        <div className="p-6 bg-gradient-to-r from-purple-500/5 to-indigo-500/5 border border-purple-100 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <p className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest leading-none mb-1.5">
+              {lang === 'bn' ? 'অ্যাক্টিভ সাবস্ক্রিপশন প্ল্যান' : 'ACTIVE SUBSCRIPTION PLAN'}
+            </p>
+            <h4 className="text-lg font-black text-[#9b59b6] flex items-center gap-1.5 leading-none">
+              {userProfile?.subscriptionStatus === 'trial' ? (lang === 'bn' ? '৩ দিনের ফ্রি ট্রায়াল' : '3 Days Free Trial') :
+               userProfile?.subscriptionPlan === 'premium' ? (lang === 'bn' ? 'প্রিমিয়াম - পাওয়ার দোকানদার' : 'Premium - Power Retail') :
+               userProfile?.subscriptionPlan === 'basic' ? (lang === 'bn' ? 'বেসিক - স্টার্টার' : 'Basic - Starter Plan') :
+               (lang === 'bn' ? 'স্ট্যান্ডার্ড - সেরা পছন্দ' : 'Standard - Recommended')}
+              <span className={`text-[9px] font-bold border px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
+                userProfile?.subscriptionStatus === 'trial' 
+                  ? 'text-amber-600 bg-amber-50 border-amber-200' 
+                  : 'text-emerald-600 bg-emerald-50 border-emerald-200'
+              }`}>
+                {userProfile?.subscriptionStatus === 'trial' ? (lang === 'bn' ? 'ট্রায়াল সচল' : 'In Trial') : (lang === 'bn' ? 'সক্রিয়' : 'Active')}
+              </span>
+            </h4>
+            <p className="text-xs text-slate-500 mt-2">
+              {userProfile?.subscriptionStatus === 'trial' ? (
+                lang === 'bn' 
+                  ? `আপনি ফ্রি ডেমো সম্পন্ন করতে ৩ দিন ট্রায়াল মেয়াদের মধ্যে ব্যবহার করছেন।` 
+                  : `Currently utilizing the 3-day premium demo trial. Upgrade anytime to avoid interruptions.`
+              ) : (
+                lang === 'bn' ? 'রিনিউ ডেট: ৩০ দিন পর (অটো ট্রান্সফার)' : 'Renewal Date: Auto-renews in 30 days.'
+              )}
+            </p>
+          </div>
+          
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <div className="bg-white border border-purple-100 px-3.5 py-2.5 rounded-xl shadow-xs text-right hidden sm:block shrink-0">
+              <span className="text-[10px] text-slate-400 font-bold block leading-none mb-1 uppercase">
+                {lang === 'bn' ? 'বিলিং সাইকেল' : 'BILLING'}
+              </span>
+              <span className="text-xs font-black text-slate-800">
+                {userProfile?.subscriptionStatus === 'trial' ? (lang === 'bn' ? '৳০ (ফ্রি)' : '৳0 (Free)') :
+                 userProfile?.subscriptionPlan === 'premium' ? '৳৯৯৯ / মাস' :
+                 userProfile?.subscriptionPlan === 'basic' ? '৳০ / ফ্রি' :
+                 '৳৪৯৯ / মাস'}
+              </span>
+            </div>
+            
+            {isOwner && onUpgradeClick && (
+              <button
+                type="button"
+                onClick={onUpgradeClick}
+                className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-sm cursor-pointer whitespace-nowrap hover:scale-[1.01]"
+              >
+                {userProfile?.subscriptionStatus === 'trial' 
+                  ? (lang === 'bn' ? 'পেইড প্ল্যানে আপগ্রেড' : 'Upgrade to Paid Plan') 
+                  : (lang === 'bn' ? 'প্ল্যান পরিবর্তন করুন' : 'Change Subscription')}
+              </button>
+            )}
+          </div>
+        </div>
+
         {isOwner ? (
           <button
             type="submit"
@@ -386,6 +481,147 @@ export default function Settings({ shopInfo, onUpdateShopInfo, userProfile, lang
               : 'Only Shop Owners can modify shop settings.'}
           </div>
         )}
+      </form>
+
+      {/* User Account & Authentication Settings Card */}
+      <form onSubmit={handleUpdateProfile} className="pro-card p-8 sm:p-10 space-y-10 shadow-xl border-none ring-1 ring-slate-200 mt-8">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-6">
+          <div>
+            <h3 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+              <UserIcon className="text-slate-500" size={24} />
+              {lang === 'bn' ? 'ইউজার অ্যাকাউন্ট ও নিরাপত্তা' : 'User Account & Security'}
+            </h3>
+            <p className="text-xs text-slate-400 font-medium mt-1">
+              {lang === 'bn' 
+                ? 'আপনার ব্যক্তিগত প্রোফাইল আপডেট করুন এবং সেশন নিরাপত্তা সেটিংস পরিচালনা করুন।' 
+                : 'Update your personal details and manage your session security here.'}
+            </p>
+          </div>
+          <AnimatePresence>
+            {profileSaved && (
+              <motion.div 
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                className="flex items-center gap-2 text-green-600 text-sm font-bold"
+              >
+                <CheckCircle2 size={18} /> {lang === 'bn' ? 'সংরক্ষিত হয়েছে!' : 'Updated!'}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        <div className="space-y-6">
+          {/* User Display Initial representation */}
+          <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+            <div className="w-14 h-14 rounded-full bg-slate-900 text-white flex items-center justify-center font-black text-xl shadow-md border border-slate-850 select-none">
+              {(profileName || currentUser?.email || '?')[0].toUpperCase()}
+            </div>
+            <div>
+              <h4 className="text-sm font-black text-slate-800 leading-none">
+                {userProfile?.name || currentUser?.displayName || (lang === 'bn' ? 'দোকানদার' : 'Store User')}
+              </h4>
+              <p className="text-[11px] text-[#9b59b6] uppercase tracking-wider font-extrabold mt-1.5 flex items-center gap-1.5 leading-none">
+                <Key size={11} />
+                {userProfile?.role === 'owner' ? (lang === 'bn' ? 'মালিক (Shop Owner) - ফুল অ্যাক্সেস' : 'Owner (Full Control)') : 
+                 userProfile?.role === 'inventory_manager' ? (lang === 'bn' ? 'ম্যানেজার - ইনভেন্টরি কন্ট্রোল' : 'Manager (Inventory)') : 
+                 (lang === 'bn' ? 'ক্যাশিয়ার - পয়েন্ট অফ সেলস' : 'Cashier (Sales Only)')}
+              </p>
+            </div>
+          </div>
+
+          {/* Edit Display Name input field */}
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-xs font-semibold text-slate-500 uppercase tracking-tight ml-1">
+              <UserIcon size={14} className="text-slate-400" /> {lang === 'bn' ? 'সম্পূর্ণ নাম' : 'Full Name'}
+            </label>
+            <input
+              required
+              type="text"
+              value={profileName}
+              onChange={(e) => setProfileName(e.target.value)}
+              className="pro-input text-base font-bold text-slate-800 hover:bg-slate-50 border-slate-200 focus:border-slate-500 rounded-2xl h-11"
+              placeholder={lang === 'bn' ? 'আপনার নাম লিখুন' : 'Enter your full name'}
+            />
+          </div>
+
+          {/* Email read-only input field */}
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-xs font-semibold text-slate-500 uppercase tracking-tight ml-1">
+              <Mail size={14} className="text-slate-400" /> {lang === 'bn' ? 'ইমেল অ্যাড্রেস (পরিবর্তন অযোগ্য)' : 'Email (Read Only)'}
+            </label>
+            <div className="relative">
+              <input
+                disabled
+                type="email"
+                value={currentUser?.email || ''}
+                className="pro-input font-bold text-slate-400 bg-slate-100/50 border-slate-200 rounded-2xl h-11 cursor-not-allowed select-all"
+              />
+              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[9px] font-bold text-slate-450 bg-slate-200 border border-slate-300 px-2 py-0.5 rounded-md uppercase tracking-wider leading-none">
+                {lang === 'bn' ? 'সুরক্ষিত' : 'Secured'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Buttons for Save and Log Out */}
+        <div className="space-y-4 pt-4 border-t border-slate-100">
+          <button
+            type="submit"
+            disabled={profileSaving}
+            className="w-full py-3.5 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+          >
+            <Save size={14} />
+            {profileSaving ? (lang === 'bn' ? 'সংরক্ষণ হচ্ছে...' : 'Saving...') : (lang === 'bn' ? 'প্রোফাইল তথ্য আপডেট করুন' : 'Update Profile Name')}
+          </button>
+
+          <div className="p-4 bg-red-50 rounded-2xl border border-red-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mt-4">
+            <div className="flex items-start gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center mt-0.5 shrink-0">
+                <ShieldAlert size={16} />
+              </div>
+              <div>
+                <p className="text-[11px] text-red-700 font-extrabold uppercase tracking-wide leading-none">
+                  {lang === 'bn' ? 'ডিভাইস সেশন কন্ট্রোল' : 'DEVICE SESSION SECURITY'}
+                </p>
+                <p className="text-[10px] text-red-600 font-semibold mt-1.5 leading-relaxed">
+                  {lang === 'bn' 
+                    ? 'আপনার কাজ শেষ হলে বা অন্য অ্যাকাউন্টে প্রবেশ করতে চাইলে ডানপাশের বাটনে চাপ দিন।' 
+                    : 'Log out when finished to secure your store data from unauthorized local access.'}
+                </p>
+              </div>
+            </div>
+
+            {!showLogoutConfirm ? (
+              <button
+                type="button"
+                onClick={() => setShowLogoutConfirm(true)}
+                className="w-full sm:w-auto px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-sm cursor-pointer whitespace-nowrap hover:scale-[1.01] flex items-center justify-center gap-1.5 leading-none shrink-0"
+              >
+                <LogOut size={13} />
+                {lang === 'bn' ? 'লগআউট করুন' : 'Log Out Account'}
+              </button>
+            ) : (
+              <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowLogoutConfirm(false)}
+                  className="px-4 py-2 bg-slate-200 hover:bg-slate-350 text-slate-700 font-bold text-xs uppercase rounded-xl transition-all cursor-pointer whitespace-nowrap"
+                >
+                  {lang === 'bn' ? 'বাতিল' : 'Cancel'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => signOut(auth)}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md cursor-pointer whitespace-nowrap flex items-center gap-1"
+                >
+                  <LogOut size={12} />
+                  {lang === 'bn' ? 'হ্যাঁ, লগআউট' : 'Yes, Log Out'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       </form>
     </div>
   );

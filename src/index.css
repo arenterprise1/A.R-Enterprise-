@@ -70,6 +70,26 @@
       print-color-adjust: exact !important;
     }
 
+    /* Force light backgrounds for all printable scopes under dark mode */
+    .app-theme-dark, .app-theme-black {
+      --theme-bg: #ffffff !important;
+      --theme-sidebar: #ffffff !important;
+      --theme-card: #ffffff !important;
+      --theme-panel: #ffffff !important;
+      --theme-border: #e2e8f0 !important;
+      --theme-text: #000000 !important;
+      --theme-text-muted: #555555 !important;
+      --theme-input-bg: #ffffff !important;
+    }
+
+    .app-theme-dark .bg-white, 
+    .app-theme-black .bg-white,
+    .app-theme-dark #printable-receipt-container,
+    .app-theme-black #printable-receipt-container,
+    .app-[#printable-receipt-container] {
+      background-color: #ffffff !important;
+    }
+
     .bg-black, .bg-black * {
       background-color: #000 !important;
       color: #fff !important;
@@ -179,13 +199,21 @@
 /* Dark/Black overall rules */
 .app-theme-dark, .app-theme-black {
   /* Panels and Container background */
-  &, &.bg-slate-50, .bg-slate-50, .bg-slate-[50\/50] {
+  &, &.bg-slate-50, .bg-slate-50, .bg-slate-[50\/50], .bg-slate-50\/50, .bg-slate-50\/20, .bg-slate-100\/60, .bg-slate-200\/40, .bg-[#F8FAFC]\/50, .bg-[#F8FAFC]\/20, .bg-[#f8fafc] {
     background-color: var(--theme-bg) !important;
   }
 
   /* Main frame background overlays */
-  .bg-white, .pro-card, .bg-white\/80 {
+  .bg-white, .pro-card, .bg-white\/80, .bg-white\/90 {
     background-color: var(--theme-card) !important;
+  }
+
+  /* Secondary backgrounds mapped to panel/hover in dark mode to prevent white-on-white text */
+  .bg-slate-100, .bg-gray-100, .bg-zinc-100, .bg-slate-100/10, .bg-slate-100/20, .bg-slate-150 {
+    background-color: var(--theme-panel) !important;
+  }
+  .bg-slate-200, .bg-gray-200, .bg-zinc-200, .bg-slate-200/40, .bg-slate-300/10, .bg-slate-300/20 {
+    background-color: var(--theme-hover) !important;
   }
 
   /* Header styles */
@@ -205,28 +233,28 @@
   table, thead, tbody, th, td, tr {
     border-color: var(--theme-border) !important;
   }
-  thead tr, tr.bg-slate-50 {
+  thead tr, tr.bg-slate-50, tr.bg-slate-100 {
     background-color: var(--theme-panel) !important;
   }
-  tbody tr:hover, .hover\:bg-slate-50\/80:hover {
+  tbody tr:hover, .hover\:bg-slate-50\/80:hover, tbody tr.hover\:bg-slate-50\/80:hover {
     background-color: var(--theme-hover) !important;
   }
-  .divide-slate-100 > :not([hidden]) ~ :not([hidden]), .divide-y {
+  .divide-slate-100 > :not([hidden]) ~ :not([hidden]), .divide-y, .divide-slate-200 {
     border-color: var(--theme-border) !important;
   }
 
   /* Borders globally */
-  .border-slate-100, .border-slate-200, .border-slate-300, .border-slate-250, .border-gray-200, .border-zinc-200 {
+  .border-slate-100, .border-slate-200, .border-slate-300, .border-slate-250, .border-gray-200, .border-zinc-200, .border-slate-200/80 {
     border-color: var(--theme-border) !important;
   }
 
   /* Text elements to high contrast */
-  .text-slate-900, .text-slate-800, .text-slate-700, .text-gray-900, .text-zinc-900 {
+  .text-slate-955, .text-slate-950, .text-slate-900, .text-slate-850, .text-slate-800, .text-slate-750, .text-slate-700, .text-gray-955, .text-gray-900, .text-gray-800, .text-zinc-955, .text-zinc-900, .text-zinc-800, .text-black {
     color: var(--theme-text) !important;
   }
 
   /* Text elements to medium/muted */
-  .text-slate-600, .text-slate-500, .text-slate-400, .text-gray-600, .text-gray-500, .text-gray-400 {
+  .text-slate-600, .text-slate-500, .text-slate-450, .text-slate-400, .text-gray-600, .text-gray-500, .text-gray-400, .text-zinc-600, .text-zinc-500, .text-zinc-400 {
     color: var(--theme-text-muted) !important;
   }
 

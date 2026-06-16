@@ -12,9 +12,13 @@ export interface StaffMember {
 export interface UserProfile {
   uid: string;
   email: string;
+  username?: string;
   role: UserRole;
   shopId: string;
   name?: string;
+  subscriptionPlan?: string;
+  subscriptionStatus?: string;
+  subscriptionDate?: number;
 }
 
 export interface Product {
@@ -31,6 +35,7 @@ export interface Product {
   unit: string;
   imageUrl?: string;
   shopId: string;
+  outletId?: string; // outlet binding
 }
 
 export interface SaleItem {
@@ -57,6 +62,16 @@ export interface Sale {
   customerAddress?: string;
   shopId: string;
   createdBy: string;
+  paymentMethod?: 'cash' | 'card' | 'bkash' | 'nagad' | 'rocket' | 'qr';
+  pointsEarned?: number;
+  pointsRedeemed?: number;
+  discountType?: 'percentage' | 'fixed' | 'promo' | 'loyalty';
+  promoCode?: string;
+  digitalReceiptSent?: boolean;
+  receiptSentType?: 'sms' | 'email';
+  receiptSentValue?: string;
+  outletId?: string; // Active Outlet representation
+  offline?: boolean; // Local sync flag
 }
 
 export interface ShopInfo {
@@ -65,6 +80,14 @@ export interface ShopInfo {
   phone: string;
   logoUrl?: string;
   accentColor?: string;
+}
+
+export interface Outlet {
+  id: string;
+  name: string;
+  address: string;
+  phone: string;
+  shopId: string;
 }
 
 export interface Customer {
@@ -76,6 +99,7 @@ export interface Customer {
   totalDue?: number; // Total outstanding balance across all transactions (বাকি খাতা)
   lastPurchaseDate?: number;
   shopId: string;
+  points?: number; // Loyalty points balance
 }
 
-export type View = 'dashboard' | 'inventory' | 'pos' | 'history' | 'customers' | 'settings' | 'staff';
+export type View = 'dashboard' | 'inventory' | 'pos' | 'history' | 'customers' | 'settings' | 'staff' | 'logout';

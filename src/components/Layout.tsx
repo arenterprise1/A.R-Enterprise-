@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { LayoutDashboard, Package, ShoppingCart, History, Store, Menu, X, Settings as SettingsIcon, Users, Wifi, WifiOff, Calculator as CalculatorIcon, Camera, Upload, Image as ImageIcon, Save, Phone, MapPin, Edit } from 'lucide-react';
+import { LayoutDashboard, Package, ShoppingCart, History, Store, Menu, X, Settings as SettingsIcon, Users, Wifi, WifiOff, Calculator as CalculatorIcon, Camera, Upload, Image as ImageIcon, Save, Phone, MapPin, Edit, Sparkles, LogOut } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { View, UserProfile, UserRole, ShopInfo } from '../types';
@@ -7,6 +7,8 @@ import { UserMenu, AR_LOGO_BASE64 } from './Auth';
 import { Calculator } from './Calculator';
 import { Language, translations } from '../translations';
 import { Globe } from 'lucide-react';
+import { auth } from '../lib/firebase';
+import { signOut } from 'firebase/auth';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -17,9 +19,10 @@ interface LayoutProps {
   onLanguageChange: (lang: Language) => void;
   shopInfo?: ShopInfo;
   onUpdateShopInfo?: (info: ShopInfo) => void;
+  onUpgradeClick?: () => void;
 }
 
-export default function Layout({ children, activeView, onViewChange, userProfile, lang, onLanguageChange, shopInfo, onUpdateShopInfo }: LayoutProps) {
+export default function Layout({ children, activeView, onViewChange, userProfile, lang, onLanguageChange, shopInfo, onUpdateShopInfo, onUpgradeClick }: LayoutProps) {
   const [appTheme, setAppTheme] = useState<'white' | 'dark'>(() => {
     try {
       const saved = localStorage.getItem('app_theme');
@@ -381,6 +384,23 @@ export default function Layout({ children, activeView, onViewChange, userProfile
               <Wifi size={18} className={cn(isOnline ? "text-emerald-500" : "text-slate-400")} />
               <span className="hidden md:inline">{t.refresh}</span>
             </button>
+            {userProfile?.subscriptionStatus === 'trial' && (
+              <button
+                onClick={onUpgradeClick}
+                className="px-3 py-1.5 bg-gradient-to-r from-amber-500/10 to-orange-500/10 hover:from-amber-500/20 hover:to-orange-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-black rounded-xl text-xs flex items-center gap-2 animate-pulse cursor-pointer group shadow-sm transition-all"
+                title={lang === 'bn' ? 'প্রিমিয়াম সাবস্ক্রিপশনে আপগ্রেড করুন' : 'Upgrade to Premium Subscription'}
+              >
+                <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-ping" />
+                <span>
+                  {(() => {
+                    const daysLeft = Math.max(0, Math.ceil(3 - (Date.now() - (userProfile.subscriptionDate || Date.now())) / (1000 * 60 * 60 * 24)));
+                    return lang === 'bn' ? `ফ্রি ট্রায়াল (${daysLeft} দিন অবশিষ্ট)` : `Free Trial (${daysLeft}d left)`;
+                  })()}
+                </span>
+                <Sparkles size={11} className="group-hover:rotate-12 transition-transform text-amber-500 shrink-0" />
+              </button>
+            )}
+
             <button 
               onClick={() => onLanguageChange(lang === 'bn' ? 'en' : 'bn')}
               className="p-2 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-all flex items-center gap-2 text-sm font-medium"
@@ -432,7 +452,22 @@ export default function Layout({ children, activeView, onViewChange, userProfile
               <CalculatorIcon size={18} />
               <span className="hidden sm:inline">{lang === 'bn' ? 'ক্যালকুলেটর' : 'Calculator'}</span>
             </button>
-            <UserMenu userProfile={userProfile} />
+            
+            <button 
+              onClick={() => onViewChange('settings')}
+              className="flex items-center gap-3 hover:bg-slate-50 p-1.5 rounded-2xl transition-all cursor-pointer border border-transparent hover:border-slate-150 shrink-0"
+              title={lang === 'bn' ? 'ইউজার অ্যাকাউন্ট ও সেটিংস' : 'User Account & Settings'}
+            >
+              <div className="text-right hidden sm:flex flex-col items-end leading-none">
+                <span className="text-xs font-extrabold text-slate-800">{userProfile?.name || auth.currentUser?.displayName || 'দোকানদার'}</span>
+                <span className="text-[9px] text-[#9b59b6] uppercase tracking-wider font-black mt-1">
+                  {userProfile?.role === 'owner' ? (lang === 'bn' ? 'মালিক' : 'Owner') : (userProfile?.role === 'inventory_manager' ? (lang === 'bn' ? 'ম্যানেজার' : 'Manager') : (lang === 'bn' ? 'ক্যাশিয়ার' : 'Cashier'))}
+                </span>
+              </div>
+              <div className="w-10 h-10 rounded-full bg-slate-900 text-white flex items-center justify-center font-black text-base shadow-sm border border-slate-850">
+                {(userProfile?.name || auth.currentUser?.displayName || auth.currentUser?.email || '?')[0].toUpperCase()}
+              </div>
+            </button>
           </div>
         </header>
 
